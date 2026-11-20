@@ -18,7 +18,7 @@ docker compose -p forge-dashboard up -d --build
 
 Live: `http://38.60.176.61:3200` · LCD: `http://38.60.176.61:3200/psx`
 
-CI: push to `main` runs unit tests, then rsyncs to `/opt/forge-dashboard` and restarts only the `forge-dashboard` container via GitHub Actions (`DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_SSH_KEY` secrets).
+CI: push to `main` runs unit tests on GitHub-hosted runners, then a **self-hosted** `forge-vps` runner on this box syncs `/opt/forge-dashboard` and restarts only the `forge-dashboard` compose project (other stacks untouched).
 
 **[Report blueprint](REPORT-BLUEPRINT.md)** maps the 29 slides to the dashboard and describes the next steps for a team deployment.
 
