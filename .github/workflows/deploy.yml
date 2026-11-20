@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Run tests
-        run: python -m unittest -v test_market test_psx test_commodities
+        run: python -m unittest -v test_market test_psx test_commodities test_lcd
 
   deploy:
     name: Deploy on VPS
@@ -56,6 +56,9 @@ jobs:
             if [[ "$code" == "200" ]] && grep -qi 'forge' /tmp/forge-smoke.html; then
               echo "Smoke OK on :3200"
               curl -fsS -o /dev/null -w 'psx:%{http_code}\n' http://127.0.0.1:3200/psx
+              curl -fsS -o /dev/null -w 'lcd:%{http_code}\n' http://127.0.0.1:3200/lcd
+              curl -fsS -o /tmp/forge-lcd.json -w 'lcd-api:%{http_code}\n' http://127.0.0.1:3200/api/lcd/overview
+              grep -q '"futures"' /tmp/forge-lcd.json
               exit 0
             fi
             sleep 2

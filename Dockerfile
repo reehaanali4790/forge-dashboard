@@ -8,7 +8,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     FORGE_PORT=3000
 
 # App is stdlib-only; copy source and run as non-root.
-COPY agent.py commodities.py envconfig.py market.py psx.py server.py ./
+COPY agent.py commodities.py envconfig.py market.py psx.py server.py \
+     fob_freight.py tradedeck.py lcd.py ./
 COPY data ./data
 COPY static ./static
 
