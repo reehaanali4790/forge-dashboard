@@ -1,9 +1,10 @@
 (() => {
-  const POLL_MS = 50000;
-  const EMPHASIS_MS = 8000;
+  const POLL_MS = 45000;
+  const EMPHASIS_MS = 7000;
   const FUT_ORDER = ['HC2701', 'I2701', 'JM2701', 'J2701', 'USDCNY'];
   let emphasis = 0;
   let lastPayload = null;
+  const prevQuotes = new Map();
 
   const $ = (id) => document.getElementById(id);
 
@@ -33,14 +34,21 @@
   function signed(n, digits = 2) {
     if (n == null || Number.isNaN(Number(n))) return '—';
     const v = Number(n);
-    const s = v > 0 ? '+' : '';
-    return s + fmt(v, digits);
+    return `${v > 0 ? '+' : ''}${fmt(v, digits)}`;
   }
 
   function setFeed(name, state) {
     const el = document.querySelector(`[data-feed="${name}"] .dot`);
     if (!el) return;
     el.className = `dot ${state || 'loading'}`;
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   function sparkBars(el, values) {
@@ -54,58 +62,68 @@
     const max = Math.max(...nums);
     const span = max - min || 1;
     el.innerHTML = nums.map((n) => {
-      const h = 18 + ((n - min) / span) * 82;
+      const h = 22 + ((n - min) / span) * 78;
       return `<i style="height:${h}%"></i>`;
     }).join('');
+  }
+
+  function flashIfChanged(key, value, el) {
+    const prev = prevQuotes.get(key);
+    prevQuotes.set(key, value);
+    if (prev != null && prev !== value && el) el.classList.add('flash');
   }
 
   function renderTicker(titles) {
     const track = $('ticker-track');
     const items = (titles || []).filter(Boolean);
     if (!items.length) {
-      track.innerHTML = '<span class="marquee-item">Wire quiet — waiting for headlines</span>';
+      track.innerHTML = '<span>Market wire warming up…</span>';
       return;
     }
     const doubled = items.concat(items);
-    track.innerHTML = doubled.map((t) => `<span class="marquee-item">${escapeHtml(t)}</span>`).join('');
-  }
-
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+    track.innerHTML = doubled.map((t) => `<span>${escapeHtml(t)}</span>`).join('');
   }
 
   function renderPsx(psx) {
     const state = (psx && psx.state) || 'loading';
-    $('psx-state').textContent = state;
+    $('psx-state').textContent = state === 'current' ? 'live' : state;
     setFeed('psx', state);
     const b = (psx && psx.breadth) || {};
     $('psx-breadth').innerHTML = `
-      <span>ADV <strong>${b.advancers ?? '—'}</strong></span>
-      <span>DEC <strong>${b.decliners ?? '—'}</strong></span>
-      <span>FLAT <strong>${b.unchanged ?? '—'}</strong></span>
-      <span>N <strong>${b.symbols ?? '—'}</strong></span>`;
+      <span>Adv <strong>${b.advancers ?? '—'}</strong></span>
+      <span>Dec <strong>${b.decliners ?? '—'}</strong></span>
+      <span>Flat <strong>${b.unchanged ?? '—'}</strong></span>
+      <span>Names <strong>${b.symbols ?? '—'}</strong></span>`;
     const list = $('psx-mom');
     const rows = (psx && psx.topMomentum) || [];
     if (!rows.length) {
-      list.innerHTML = '<li><span class="name">Syncing momentum board…</span></li>';
+      list.innerHTML = '<li><span class="name">Syncing momentum…</span></li>';
     } else {
-      list.innerHTML = rows.map((r) => `
-        <li>
+      list.innerHTML = rows.map((r, i) => {
+        const key = `psx:${r.symbol}`;
+        flashIfChanged(key, r.last, null);
+        const flashed = prevQuotes.has(key) ? '' : '';
+        return `
+        <li class="${flashed}" data-key="${escapeHtml(key)}">
           <span class="sym">${escapeHtml(r.symbol || '—')}</span>
           <span class="name">${escapeHtml(r.name || '')}</span>
           <span class="last">${fmt(r.last, 2)}</span>
           <span class="${deltaClass(r.changePct)}">${signed(r.changePct, 2)}%</span>
-        </li>`).join('');
+        </li>`;
+      }).join('');
+      rows.forEach((r) => {
+        const key = `psx:${r.symbol}`;
+        const li = list.querySelector(`[data-key="${CSS.escape(key)}"]`);
+        const prev = prevQuotes.get(`${key}:shown`);
+        if (prev != null && prev !== r.last && li) li.classList.add('flash');
+        prevQuotes.set(`${key}:shown`, r.last);
+      });
     }
     sparkBars($('psx-spark'), (psx && psx.spark) || rows.map((r) => r.changePct));
     const led = (psx && psx.ledger) || {};
     $('psx-ledger').innerHTML = `
-      <span>MOM P&amp;L <em>${signed(led.momentumPct, 2)}%</em></span>
-      <span>MODEL <em>${signed(led.modelPct, 2)}%</em></span>
+      <span>Mom P&amp;L <em>${signed(led.momentumPct, 2)}%</em></span>
+      <span>Model <em>${signed(led.modelPct, 2)}%</em></span>
       <span>PKR <em>${fmt(led.momentumPkr, 0)}</em></span>`;
   }
 
@@ -117,20 +135,24 @@
       if (q.state === 'current') any = 'current';
       else if (any !== 'current' && q.state) any = q.state;
       const meta = q.meta || {};
+      const key = `fut:${code}`;
+      const prev = prevQuotes.get(key);
+      const changed = prev != null && prev !== q.last;
+      prevQuotes.set(key, q.last);
       let marker = '';
       if (q.low != null && q.high != null && q.last != null && q.high !== q.low) {
         const pct = Math.max(0, Math.min(1, (q.last - q.low) / (q.high - q.low)));
-        marker = `<div class="range"><i style="left:${pct * 100}%"></i></div>`;
+        marker = `<div class="range"><i style="left:calc(${pct * 100}% - 5px)"></i></div>`;
       }
       return `
-        <div class="fut-tile">
-          <div class="code">${escapeHtml(code)} · ${escapeHtml(meta.name || '')}</div>
+        <div class="fut-tile ${changed ? 'flash' : ''}">
+          <div class="code">${escapeHtml(meta.name || code)}</div>
           <div class="px">${fmt(q.last, code === 'USDCNY' ? 4 : 1)}</div>
           <div class="${deltaClass(q.changePct)}">${signed(q.changePct, 2)}%</div>
           ${marker}
         </div>`;
     }).join('');
-    $('fut-state').textContent = any;
+    $('fut-state').textContent = any === 'current' ? 'live' : any;
     setFeed('futures', any);
   }
 
@@ -138,91 +160,175 @@
     const products = (fob && fob.products) || [];
     const box = $('fob-products');
     if (!products.length) {
-      box.innerHTML = '<div class="fob-row"><span class="label">FOB sync…</span></div>';
+      box.innerHTML = '<div class="fob-row"><span class="label">FOB syncing…</span></div>';
     } else {
-      box.innerHTML = products.slice(0, 3).map((p) => `
-        <div class="fob-row">
+      box.innerHTML = products.slice(0, 2).map((p) => {
+        const key = `fob:${p.symbol || p.name}`;
+        const prev = prevQuotes.get(key);
+        const changed = prev != null && prev !== p.mid;
+        prevQuotes.set(key, p.mid);
+        return `
+        <div class="fob-row ${changed ? 'flash' : ''}">
           <span class="label">${escapeHtml(p.name || p.symbol)}</span>
           <span class="mid">${fmt(p.mid, 0)} <small>${escapeHtml(p.unit || '')}</small></span>
-          <span class="meta">${escapeHtml(p.source || '')}${p.asOf ? ' · ' + escapeHtml(p.asOf) : ''}</span>
-        </div>`).join('');
+          <span class="meta">${escapeHtml((p.source || '').replace(' · public scrape', ''))}${p.asOf ? ' · ' + escapeHtml(p.asOf) : ''}</span>
+        </div>`;
+      }).join('');
     }
     const bdi = (fob && fob.bdi) || {};
+    const bdiKey = 'bdi';
+    const prevBdi = prevQuotes.get(bdiKey);
+    const bdiChanged = prevBdi != null && prevBdi !== bdi.value;
+    prevQuotes.set(bdiKey, bdi.value);
     $('bdi-panel').innerHTML = `
       <div>
-        <div class="idx">BALTIC DRY · ${escapeHtml(bdi.index || 'BDI')}</div>
-        <div class="val">${fmt(bdi.value, 0)}</div>
+        <div class="idx">Baltic Dry Index</div>
+        <div class="val ${bdiChanged ? 'flash' : ''}">${fmt(bdi.value, 0)}</div>
       </div>
       <div>
         <div class="${deltaClass(bdi.change)}">${signed(bdi.change, 0)} · ${signed(bdi.pct, 2)}%</div>
-        <div class="meta" style="font-family:var(--font-mono);font-size:0.65rem;color:var(--muted);margin-top:0.35rem">
-          ${escapeHtml(bdi.date || '—')} · ${escapeHtml(bdi.source || '')}
+        <div class="meta" style="font-family:var(--mono);font-size:0.72rem;color:var(--muted);margin-top:0.35rem">
+          ${escapeHtml(bdi.date || '—')}
         </div>
       </div>`;
-    $('fob-disclaimer').textContent = (fob && fob.disclaimer)
-      || 'FOB scrape + BDI · not settlement / not advice';
+    $('fob-disclaimer').textContent = 'Indicative scrape · not settlement · not advice';
     const st = (fob && fob.state) || 'loading';
     setFeed('fob', st === 'seed' ? 'cached' : st);
   }
 
-  function vesselCard(v) {
-    if (!v) {
-      return '<div class="vessel empty">— slot open —</div>';
+  function etaCountdown(eta, days) {
+    if (!eta) {
+      if (days == null) return { label: '—', progress: 0.2 };
+      if (days < 0) return { label: `${Math.abs(days)}d ashore`, progress: 1 };
+      if (days === 0) return { label: 'due today', progress: 0.92 };
+      return { label: `${days}d out`, progress: Math.max(0.12, 1 - days / 30) };
     }
-    const days = v.days;
-    let badge = 'ETA';
-    let badgeClass = 'badge';
-    if (days == null) badge = escapeHtml(v.status || '—');
-    else if (days < 0) {
-      badge = `D${days}`;
-      badgeClass = 'badge late';
-    } else if (days === 0) badge = 'TODAY';
-    else badge = `D+${days}`;
-    const qty = v.qtyMt != null ? `${fmt(v.qtyMt, 0)} MT` : '— MT';
+    const target = Date.parse(eta.length <= 10 ? `${eta}T00:00:00` : eta);
+    if (!Number.isFinite(target)) return etaCountdown(null, days);
+    const ms = target - Date.now();
+    const abs = Math.abs(ms);
+    const d = Math.floor(abs / 86400000);
+    const h = Math.floor((abs % 86400000) / 3600000);
+    const m = Math.floor((abs % 3600000) / 60000);
+    if (ms < 0) {
+      return { label: d > 0 ? `${d}d ${h}h ashore` : `${h}h ${m}m ashore`, progress: 1 };
+    }
+    const label = d > 0 ? `${d}d ${h}h` : `${h}h ${m}m`;
+    return { label, progress: Math.max(0.1, Math.min(0.95, 1 - ms / (30 * 86400000))) };
+  }
+
+  function vesselCard(v) {
+    if (!v) return '';
+    const cd = etaCountdown(v.eta, v.days);
+    const badgeClass = (v.days != null && v.days < 0) ? 'badge late' : 'badge';
+    const qty = v.qtyMt != null ? `${fmt(v.qtyMt, 0)} MT` : '';
     return `
-      <div class="vessel">
+      <div class="vessel" data-eta="${escapeHtml(v.eta || '')}" data-days="${v.days ?? ''}">
         <div class="name">${escapeHtml(v.vessel)}</div>
-        <span class="${badgeClass}">${badge}</span>
+        <span class="${badgeClass}">${escapeHtml(v.status || 'ETA')}</span>
         <div class="meta">
-          <span>${escapeHtml(v.voyage || '—')}</span>
-          <span>${escapeHtml(v.port || '—')}</span>
+          <span>${escapeHtml(v.voyage || '')}</span>
+          <span>${escapeHtml(v.port || '')}</span>
           <span>${qty}</span>
-          <span>${escapeHtml(v.buyer || '—')}</span>
-          <span>${escapeHtml(v.status || '')}</span>
+          <span>${escapeHtml(v.buyer || '')}</span>
+          <span class="eta-live">${escapeHtml(cd.label)}</span>
         </div>
-        <div class="rail" aria-hidden="true"><i></i></div>
+        <div class="rail" aria-hidden="true"><i style="width:${Math.round(cd.progress * 100)}%"></i></div>
       </div>`;
   }
 
-  function fillColumn(listId, countId, rows) {
+  function waitingBlock(message, detail) {
+    return `
+      <div class="waiting">
+        <div class="pulse-ring" aria-hidden="true"></div>
+        <strong>${escapeHtml(message)}</strong>
+        <span>${escapeHtml(detail)}</span>
+      </div>`;
+  }
+
+  function fillColumn(listId, countId, rows, vessels) {
     const list = $(listId);
-    const items = rows || [];
+    const items = (rows || []).filter(Boolean);
     $(countId).textContent = String(items.length);
-    const padded = [...items];
-    while (padded.length < 4) padded.push(null);
-    list.innerHTML = padded.slice(0, 4).map(vesselCard).join('');
+    if (!items.length) {
+      list.innerHTML = '';
+      return;
+    }
+    list.innerHTML = items.slice(0, 4).map(vesselCard).join('');
   }
 
   function renderVessels(v) {
     const vessels = v || {};
-    fillColumn('list-arrived', 'count-arrived', vessels.arrived);
-    fillColumn('list-transit', 'count-transit', vessels.transit);
-    fillColumn('list-booked', 'count-booked', vessels.booked);
-    const st = vessels.state || (vessels.configured === false ? 'unconfigured' : 'loading');
-    setFeed('vessels', st === 'unconfigured' ? 'unconfigured' : st);
+    const band = $('vessel-band');
+    const unconfigured = vessels.configured === false || vessels.state === 'unconfigured';
+    const empty = !(vessels.arrived || []).length && !(vessels.transit || []).length && !(vessels.booked || []).length;
+
+    if (unconfigured || (empty && vessels.state !== 'current')) {
+      band.innerHTML = waitingBlock(
+        unconfigured ? 'TradeDeck not linked yet' : 'Waiting for vessel movement',
+        unconfigured
+          ? 'Add VIEWER credentials on the server to stream arrivals, transit, and booked lots.'
+          : 'Polling arrivals — boards fill as soon as shipments move.',
+      );
+      setFeed('vessels', unconfigured ? 'unconfigured' : (vessels.state || 'loading'));
+      return;
+    }
+
+    if (!band.querySelector('#list-arrived')) {
+      band.innerHTML = `
+        <article class="pane pane-vessel" id="col-arrived" data-col="0">
+          <header class="pane-head"><h2>Arrived</h2><span class="count" id="count-arrived">0</span></header>
+          <div class="vessels" id="list-arrived"></div>
+        </article>
+        <article class="pane pane-vessel" id="col-transit" data-col="1">
+          <header class="pane-head"><h2>In transit</h2><span class="count" id="count-transit">0</span></header>
+          <div class="vessels" id="list-transit"></div>
+        </article>
+        <article class="pane pane-vessel" id="col-booked" data-col="2">
+          <header class="pane-head"><h2>Booked</h2><span class="count" id="count-booked">0</span></header>
+          <div class="vessels" id="list-booked"></div>
+        </article>`;
+    }
+
+    fillColumn('list-arrived', 'count-arrived', vessels.arrived, vessels);
+    fillColumn('list-transit', 'count-transit', vessels.transit, vessels);
+    fillColumn('list-booked', 'count-booked', vessels.booked, vessels);
+    setFeed('vessels', vessels.state || 'current');
+  }
+
+  function tickVesselCountdowns() {
+    document.querySelectorAll('.vessel[data-eta]').forEach((el) => {
+      const eta = el.getAttribute('data-eta');
+      const daysRaw = el.getAttribute('data-days');
+      const days = daysRaw === '' ? null : Number(daysRaw);
+      const cd = etaCountdown(eta, Number.isFinite(days) ? days : null);
+      const live = el.querySelector('.eta-live');
+      const rail = el.querySelector('.rail i');
+      if (live && live.textContent !== cd.label) {
+        live.textContent = cd.label;
+        el.classList.add('live-tick');
+        setTimeout(() => el.classList.remove('live-tick'), 500);
+      }
+      if (rail) rail.style.width = `${Math.round(cd.progress * 100)}%`;
+    });
   }
 
   function renderNews(news) {
     const wire = $('news-wire');
-    const items = (news || []).slice(0, 8);
+    const items = (news || []).slice(0, 7);
     if (!items.length) {
-      wire.innerHTML = '<li>No headlines yet</li>';
+      wire.innerHTML = '<li>Wire quiet</li>';
       return;
     }
     wire.innerHTML = items.map((n) => `
       <li>${escapeHtml(n.title)}
-        <span class="src">${escapeHtml(n.source || '')}${n.published ? ' · ' + escapeHtml(n.published) : ''}</span>
+        <span class="src">${escapeHtml(n.source || '')}</span>
       </li>`).join('');
+    const pulse = $('wire-pulse');
+    if (pulse) {
+      pulse.textContent = 'live';
+      pulse.classList.add('flash');
+    }
   }
 
   function render(payload) {
@@ -249,10 +355,13 @@
   }
 
   function cycleEmphasis() {
-    const cols = [ $('col-arrived'), $('col-transit'), $('col-booked'), $('col-news') ];
-    cols.forEach((c) => c && c.classList.remove('emphasize'));
-    const target = cols[emphasis % cols.length];
-    if (target) target.classList.add('emphasize');
+    const cols = [
+      $('card-psx'), $('card-futures'), $('card-fob'),
+      $('col-arrived'), $('col-transit'), $('col-booked'), $('col-news'),
+    ].filter(Boolean);
+    cols.forEach((c) => c.classList.remove('emphasize'));
+    if (!cols.length) return;
+    cols[emphasis % cols.length].classList.add('emphasize');
     emphasis += 1;
   }
 
@@ -265,6 +374,7 @@
 
   pktNow();
   setInterval(pktNow, 1000);
+  setInterval(tickVesselCountdowns, 1000);
   poll();
   setInterval(poll, POLL_MS);
   cycleEmphasis();

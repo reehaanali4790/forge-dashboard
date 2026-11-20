@@ -3,109 +3,102 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#05060a">
-  <meta name="description" content="Forge 64-inch LCD wall — PSX, futures, FOB/BDI, TradeDeck vessels.">
+  <meta name="theme-color" content="#e8eef6">
+  <meta name="description" content="Forge wall board — PSX, futures, FOB/BDI, TradeDeck vessels.">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/lcd.css">
   <script src="/lcd.js" defer></script>
-  <title>Forge · 64″ Wall</title>
+  <title>Forge</title>
 </head>
 <body>
-  <div class="atmosphere" aria-hidden="true">
-    <div class="grid-floor"></div>
-    <div class="scanlines"></div>
-    <div class="vignette"></div>
+  <div class="sky" aria-hidden="true">
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+    <div class="blob b3"></div>
+    <div class="sheen"></div>
   </div>
 
-  <header class="hud">
-    <div class="hud-brand">
-      <a href="/" class="brand">FORGE</a>
-      <span class="sep">//</span>
-      <strong>64″ WALL</strong>
-      <span class="chip">PKT</span>
-    </div>
-    <div class="hud-clock">
+  <header class="topbar">
+    <a href="/" class="brand">Forge</a>
+    <div class="clock-block">
       <time id="wall-date">—</time>
-      <time id="wall-time" class="glow">—</time>
+      <time id="wall-time">—</time>
+      <span class="tz">Pakistan</span>
     </div>
-    <div class="hud-feeds" id="feed-dots">
-      <span class="feed" data-feed="psx"><i class="dot loading"></i> PSX</span>
-      <span class="feed" data-feed="futures"><i class="dot loading"></i> SINA</span>
-      <span class="feed" data-feed="fob"><i class="dot loading"></i> FOB/BDI</span>
-      <span class="feed" data-feed="vessels"><i class="dot loading"></i> DECK</span>
-    </div>
-    <div class="hud-actions">
-      <kbd>F</kbd> fullscreen
+    <div class="feeds" id="feed-dots">
+      <span class="feed" data-feed="psx"><i class="dot loading"></i>PSX</span>
+      <span class="feed" data-feed="futures"><i class="dot loading"></i>Futures</span>
+      <span class="feed" data-feed="fob"><i class="dot loading"></i>FOB</span>
+      <span class="feed" data-feed="vessels"><i class="dot loading"></i>Vessels</span>
     </div>
   </header>
 
-  <div class="marquee" aria-label="News ticker">
-    <div class="marquee-track" id="ticker-track">
-      <span class="marquee-item">Waiting for wire…</span>
+  <div class="ticker" aria-label="Market wire">
+    <div class="ticker-track" id="ticker-track">
+      <span>Loading market wire…</span>
     </div>
   </div>
 
-  <main class="wall">
-    <section class="row markets" aria-label="Markets">
-      <article class="glass" id="card-psx">
-        <header class="card-head">
-          <p class="tele">PSX · MOMENTUM</p>
-          <span class="state" id="psx-state">—</span>
+  <main class="board">
+    <section class="band markets" aria-label="Markets">
+      <article class="pane pane-psx" id="card-psx">
+        <header class="pane-head">
+          <h2>PSX momentum</h2>
+          <span class="live" id="psx-state">sync</span>
         </header>
-        <div class="psx-body">
-          <div class="breadth" id="psx-breadth"></div>
-          <ol class="mom-list" id="psx-mom"></ol>
-          <div class="spark" id="psx-spark" aria-hidden="true"></div>
-          <footer class="ledger" id="psx-ledger"></footer>
-        </div>
+        <div class="breadth" id="psx-breadth"></div>
+        <ol class="mom" id="psx-mom"></ol>
+        <div class="spark" id="psx-spark" aria-hidden="true"></div>
+        <footer class="ledger" id="psx-ledger"></footer>
       </article>
 
-      <article class="glass" id="card-futures">
-        <header class="card-head">
-          <p class="tele">FUTURES · SINA</p>
-          <span class="state" id="fut-state">—</span>
+      <article class="pane pane-fut" id="card-futures">
+        <header class="pane-head">
+          <h2>China futures</h2>
+          <span class="live" id="fut-state">sync</span>
         </header>
-        <div class="fut-grid" id="fut-grid"></div>
+        <div class="fut-rail" id="fut-grid"></div>
       </article>
 
-      <article class="glass" id="card-fob">
-        <header class="card-head">
-          <p class="tele">FOB + SEAWAY</p>
-          <span class="honesty">scrape · not settlement</span>
+      <article class="pane pane-fob" id="card-fob">
+        <header class="pane-head">
+          <h2>FOB &amp; seaway</h2>
+          <span class="live soft">indicative</span>
         </header>
-        <div class="fob-body">
-          <div class="fob-products" id="fob-products"></div>
-          <div class="bdi-panel" id="bdi-panel"></div>
-          <p class="disclaimer" id="fob-disclaimer">FOB scrape + BDI · not settlement / not advice</p>
-        </div>
+        <div class="fob-stack" id="fob-products"></div>
+        <div class="bdi" id="bdi-panel"></div>
+        <p class="note" id="fob-disclaimer">Indicative scrape · not settlement</p>
       </article>
     </section>
 
-    <section class="row vessels" aria-label="TradeDeck and news">
-      <article class="glass col" id="col-arrived" data-col="0">
-        <header class="col-head">
-          <p class="tele">RECENTLY ARRIVED</p>
-          <span class="count" id="count-arrived">0</span>
-        </header>
-        <div class="vessel-list" id="list-arrived"></div>
-      </article>
-      <article class="glass col" id="col-transit" data-col="1">
-        <header class="col-head">
-          <p class="tele">IN TRANSIT</p>
-          <span class="count" id="count-transit">0</span>
-        </header>
-        <div class="vessel-list" id="list-transit"></div>
-      </article>
-      <article class="glass col" id="col-booked" data-col="2">
-        <header class="col-head">
-          <p class="tele">BOOKED</p>
-          <span class="count" id="count-booked">0</span>
-        </header>
-        <div class="vessel-list" id="list-booked"></div>
-      </article>
-      <article class="glass news-col" id="col-news">
-        <header class="col-head">
-          <p class="tele">WIRE</p>
+    <section class="band ops" aria-label="Vessels and wire">
+      <div class="vessel-band" id="vessel-band">
+        <article class="pane pane-vessel" id="col-arrived" data-col="0">
+          <header class="pane-head">
+            <h2>Arrived</h2>
+            <span class="count" id="count-arrived">0</span>
+          </header>
+          <div class="vessels" id="list-arrived"></div>
+        </article>
+        <article class="pane pane-vessel" id="col-transit" data-col="1">
+          <header class="pane-head">
+            <h2>In transit</h2>
+            <span class="count" id="count-transit">0</span>
+          </header>
+          <div class="vessels" id="list-transit"></div>
+        </article>
+        <article class="pane pane-vessel" id="col-booked" data-col="2">
+          <header class="pane-head">
+            <h2>Booked</h2>
+            <span class="count" id="count-booked">0</span>
+          </header>
+          <div class="vessels" id="list-booked"></div>
+        </article>
+      </div>
+      <article class="pane pane-wire" id="col-news">
+        <header class="pane-head">
+          <h2>Wire</h2>
+          <span class="live" id="wire-pulse">live</span>
         </header>
         <ul class="wire" id="news-wire"></ul>
       </article>
