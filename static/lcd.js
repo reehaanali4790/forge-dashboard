@@ -1,10 +1,9 @@
 (() => {
   const POLL_MS = 45000;
-  const EMPHASIS_MS = 7000;
+  const EMPHASIS_MS = 8000;
   const FUT_ORDER = ['HC2701', 'I2701', 'JM2701', 'J2701', 'USDCNY'];
   let emphasis = 0;
-  let lastPayload = null;
-  const prevQuotes = new Map();
+  const prev = new Map();
 
   const $ = (id) => document.getElementById(id);
 
@@ -39,8 +38,7 @@
 
   function setFeed(name, state) {
     const el = document.querySelector(`[data-feed="${name}"] .dot`);
-    if (!el) return;
-    el.className = `dot ${state || 'loading'}`;
+    if (el) el.className = `dot ${state || 'loading'}`;
   }
 
   function escapeHtml(s) {
@@ -51,26 +49,52 @@
       .replace(/"/g, '&quot;');
   }
 
-  function sparkBars(el, values) {
-    if (!el) return;
+  function trendClass(pct) {
+    if (pct == null || Number.isNaN(Number(pct))) return 'flat';
+    if (pct > 0) return 'up';
+    if (pct < 0) return 'down';
+    return 'flat';
+  }
+
+  function svgSpark(values) {
     const nums = (values || []).map(Number).filter((n) => Number.isFinite(n));
-    if (!nums.length) {
-      el.innerHTML = '';
-      return;
+    if (nums.length < 2) {
+      return '<svg class="chart-svg" viewBox="0 0 100 40" preserveAspectRatio="none"></svg>';
     }
     const min = Math.min(...nums);
     const max = Math.max(...nums);
     const span = max - min || 1;
-    el.innerHTML = nums.map((n) => {
-      const h = 22 + ((n - min) / span) * 78;
-      return `<i style="height:${h}%"></i>`;
-    }).join('');
+    const w = 100;
+    const h = 40;
+    const pad = 3;
+    const pts = nums.map((n, i) => {
+      const x = (i / (nums.length - 1)) * w;
+      const y = pad + (1 - (n - min) / span) * (h - pad * 2);
+      return [x, y];
+    });
+    const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(2)},${p[1].toFixed(2)}`).join(' ');
+    const area = `${line} L${w},${h} L0,${h} Z`;
+    return `<svg class="chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+      <path class="area" d="${area}"></path>
+      <path class="line" d="${line}"></path>
+    </svg>`;
   }
 
-  function flashIfChanged(key, value, el) {
-    const prev = prevQuotes.get(key);
-    prevQuotes.set(key, value);
-    if (prev != null && prev !== value && el) el.classList.add('flash');
+  function chartCard({ symbol, name, last, changePct, spark, digits = 2, unit = '' }) {
+    const key = `c:${symbol}`;
+    const changed = prev.has(key) && prev.get(key) !== last;
+    prev.set(key, last);
+    const trend = trendClass(changePct);
+    return `
+      <article class="chart-card ${trend} ${changed ? 'flash' : ''}">
+        <div class="sym">${escapeHtml(symbol || '—')}</div>
+        <div class="name">${escapeHtml(name || '')}${unit ? ' · ' + escapeHtml(unit) : ''}</div>
+        <div class="px-row">
+          <span class="px">${fmt(last, digits)}</span>
+          <span class="${deltaClass(changePct)}">${signed(changePct, 2)}%</span>
+        </div>
+        ${svgSpark(spark)}
+      </article>`;
   }
 
   function renderTicker(titles) {
@@ -93,33 +117,21 @@
       <span>Adv <strong>${b.advancers ?? '—'}</strong></span>
       <span>Dec <strong>${b.decliners ?? '—'}</strong></span>
       <span>Flat <strong>${b.unchanged ?? '—'}</strong></span>
-      <span>Names <strong>${b.symbols ?? '—'}</strong></span>`;
-    const list = $('psx-mom');
-    const rows = (psx && psx.topMomentum) || [];
-    if (!rows.length) {
-      list.innerHTML = '<li><span class="name">Syncing momentum…</span></li>';
+      <span>N <strong>${b.symbols ?? '—'}</strong></span>`;
+    const charts = (psx && (psx.charts || psx.topMomentum)) || [];
+    const grid = $('psx-charts');
+    if (!charts.length) {
+      grid.innerHTML = '<div class="chart-card flat"><div class="name">Syncing PSX charts…</div></div>';
     } else {
-      list.innerHTML = rows.map((r, i) => {
-        const key = `psx:${r.symbol}`;
-        flashIfChanged(key, r.last, null);
-        const flashed = prevQuotes.has(key) ? '' : '';
-        return `
-        <li class="${flashed}" data-key="${escapeHtml(key)}">
-          <span class="sym">${escapeHtml(r.symbol || '—')}</span>
-          <span class="name">${escapeHtml(r.name || '')}</span>
-          <span class="last">${fmt(r.last, 2)}</span>
-          <span class="${deltaClass(r.changePct)}">${signed(r.changePct, 2)}%</span>
-        </li>`;
-      }).join('');
-      rows.forEach((r) => {
-        const key = `psx:${r.symbol}`;
-        const li = list.querySelector(`[data-key="${CSS.escape(key)}"]`);
-        const prev = prevQuotes.get(`${key}:shown`);
-        if (prev != null && prev !== r.last && li) li.classList.add('flash');
-        prevQuotes.set(`${key}:shown`, r.last);
-      });
+      grid.innerHTML = charts.slice(0, 5).map((c) => chartCard({
+        symbol: c.symbol,
+        name: c.name,
+        last: c.last,
+        changePct: c.changePct,
+        spark: c.spark,
+        digits: 2,
+      })).join('');
     }
-    sparkBars($('psx-spark'), (psx && psx.spark) || rows.map((r) => r.changePct));
     const led = (psx && psx.ledger) || {};
     $('psx-ledger').innerHTML = `
       <span>Mom P&amp;L <em>${signed(led.momentumPct, 2)}%</em></span>
@@ -128,68 +140,75 @@
   }
 
   function renderFutures(futures) {
-    const grid = $('fut-grid');
+    const grid = $('fut-charts');
     let any = 'loading';
     grid.innerHTML = FUT_ORDER.map((code) => {
       const q = (futures && futures[code]) || {};
       if (q.state === 'current') any = 'current';
       else if (any !== 'current' && q.state) any = q.state;
       const meta = q.meta || {};
-      const key = `fut:${code}`;
-      const prev = prevQuotes.get(key);
-      const changed = prev != null && prev !== q.last;
-      prevQuotes.set(key, q.last);
-      let marker = '';
-      if (q.low != null && q.high != null && q.last != null && q.high !== q.low) {
-        const pct = Math.max(0, Math.min(1, (q.last - q.low) / (q.high - q.low)));
-        marker = `<div class="range"><i style="left:calc(${pct * 100}% - 5px)"></i></div>`;
-      }
-      return `
-        <div class="fut-tile ${changed ? 'flash' : ''}">
-          <div class="code">${escapeHtml(meta.name || code)}</div>
-          <div class="px">${fmt(q.last, code === 'USDCNY' ? 4 : 1)}</div>
-          <div class="${deltaClass(q.changePct)}">${signed(q.changePct, 2)}%</div>
-          ${marker}
-        </div>`;
+      return chartCard({
+        symbol: meta.short || code,
+        name: meta.name || code,
+        last: q.last,
+        changePct: q.changePct,
+        spark: q.spark,
+        digits: code === 'USDCNY' ? 4 : 1,
+        unit: meta.unit || '',
+      });
     }).join('');
     $('fut-state').textContent = any === 'current' ? 'live' : any;
     setFeed('futures', any);
+  }
+
+  function renderMetals(metals) {
+    const grid = $('metals-grid');
+    const rows = [
+      { ...(metals && metals.XAUUSD), symbol: 'XAU', name: 'Gold', digits: 2 },
+      { ...(metals && metals.USOIL), symbol: 'OIL', name: 'Crude', digits: 2 },
+    ];
+    let state = 'loading';
+    grid.innerHTML = rows.map((r) => {
+      if (r.state === 'current') state = 'current';
+      else if (state !== 'current' && r.state) state = r.state;
+      return `
+        <div class="rate-tile ${trendClass(r.pct)} ${prev.get('m:' + r.symbol) != null && prev.get('m:' + r.symbol) !== r.mid ? 'flash' : ''}">
+          <div class="label">${escapeHtml(r.name || r.symbol)}</div>
+          <div class="mid">${fmt(r.mid, r.digits)} <small>${escapeHtml(r.unit || '')}</small></div>
+          <div class="${deltaClass(r.pct)}">${signed(r.pct, 2)}%</div>
+          ${svgSpark(r.spark)}
+        </div>`;
+    }).join('');
+    rows.forEach((r) => prev.set('m:' + r.symbol, r.mid));
+    setFeed('metals', state);
   }
 
   function renderFob(fob) {
     const products = (fob && fob.products) || [];
     const box = $('fob-products');
     if (!products.length) {
-      box.innerHTML = '<div class="fob-row"><span class="label">FOB syncing…</span></div>';
+      box.innerHTML = '<div class="fob-tile"><div class="label">FOB syncing…</div></div>';
     } else {
       box.innerHTML = products.slice(0, 2).map((p) => {
         const key = `fob:${p.symbol || p.name}`;
-        const prev = prevQuotes.get(key);
-        const changed = prev != null && prev !== p.mid;
-        prevQuotes.set(key, p.mid);
+        const changed = prev.has(key) && prev.get(key) !== p.mid;
+        prev.set(key, p.mid);
         return `
-        <div class="fob-row ${changed ? 'flash' : ''}">
-          <span class="label">${escapeHtml(p.name || p.symbol)}</span>
-          <span class="mid">${fmt(p.mid, 0)} <small>${escapeHtml(p.unit || '')}</small></span>
-          <span class="meta">${escapeHtml((p.source || '').replace(' · public scrape', ''))}${p.asOf ? ' · ' + escapeHtml(p.asOf) : ''}</span>
-        </div>`;
+          <div class="fob-tile ${changed ? 'flash' : ''}">
+            <div class="label">${escapeHtml(p.grade || p.name || p.symbol)}</div>
+            <div class="mid">${fmt(p.mid, 0)} <small>${escapeHtml(p.unit || 'USD/mt')}</small></div>
+            <div class="name" style="color:var(--muted);font-size:0.72rem;font-family:var(--mono)">${escapeHtml(p.name || '')}</div>
+          </div>`;
       }).join('');
     }
     const bdi = (fob && fob.bdi) || {};
-    const bdiKey = 'bdi';
-    const prevBdi = prevQuotes.get(bdiKey);
-    const bdiChanged = prevBdi != null && prevBdi !== bdi.value;
-    prevQuotes.set(bdiKey, bdi.value);
+    const changed = prev.has('bdi') && prev.get('bdi') !== bdi.value;
+    prev.set('bdi', bdi.value);
     $('bdi-panel').innerHTML = `
-      <div>
+      <div class="bdi-hero ${changed ? 'flash' : ''}">
         <div class="idx">Baltic Dry Index</div>
-        <div class="val ${bdiChanged ? 'flash' : ''}">${fmt(bdi.value, 0)}</div>
-      </div>
-      <div>
-        <div class="${deltaClass(bdi.change)}">${signed(bdi.change, 0)} · ${signed(bdi.pct, 2)}%</div>
-        <div class="meta" style="font-family:var(--mono);font-size:0.72rem;color:var(--muted);margin-top:0.35rem">
-          ${escapeHtml(bdi.date || '—')}
-        </div>
+        <div class="val">${fmt(bdi.value, 0)}</div>
+        <div class="${deltaClass(bdi.change)}">${signed(bdi.change, 0)} · ${signed(bdi.pct, 2)}% · ${escapeHtml(bdi.date || '')}</div>
       </div>`;
     $('fob-disclaimer').textContent = 'Indicative scrape · not settlement · not advice';
     const st = (fob && fob.state) || 'loading';
@@ -200,7 +219,7 @@
     if (!eta) {
       if (days == null) return { label: '—', progress: 0.2 };
       if (days < 0) return { label: `${Math.abs(days)}d ashore`, progress: 1 };
-      if (days === 0) return { label: 'due today', progress: 0.92 };
+      if (days === 0) return { label: 'today', progress: 0.92 };
       return { label: `${days}d out`, progress: Math.max(0.12, 1 - days / 30) };
     }
     const target = Date.parse(eta.length <= 10 ? `${eta}T00:00:00` : eta);
@@ -210,51 +229,41 @@
     const d = Math.floor(abs / 86400000);
     const h = Math.floor((abs % 86400000) / 3600000);
     const m = Math.floor((abs % 3600000) / 60000);
-    if (ms < 0) {
-      return { label: d > 0 ? `${d}d ${h}h ashore` : `${h}h ${m}m ashore`, progress: 1 };
-    }
-    const label = d > 0 ? `${d}d ${h}h` : `${h}h ${m}m`;
-    return { label, progress: Math.max(0.1, Math.min(0.95, 1 - ms / (30 * 86400000))) };
+    if (ms < 0) return { label: d > 0 ? `${d}d ashore` : `${h}h ashore`, progress: 1 };
+    return {
+      label: d > 0 ? `${d}d ${h}h` : `${h}h ${m}m`,
+      progress: Math.max(0.1, Math.min(0.95, 1 - ms / (30 * 86400000))),
+    };
+  }
+
+  function shortStatus(status) {
+    const s = (status || '').replace(/_/g, ' ');
+    if (s.length <= 16) return s;
+    return s.slice(0, 14) + '…';
   }
 
   function vesselCard(v) {
     if (!v) return '';
     const cd = etaCountdown(v.eta, v.days);
-    const badgeClass = (v.days != null && v.days < 0) ? 'badge late' : 'badge';
+    const late = v.days != null && v.days < 0;
     const qty = v.qtyMt != null ? `${fmt(v.qtyMt, 0)} MT` : '';
     return `
       <div class="vessel" data-eta="${escapeHtml(v.eta || '')}" data-days="${v.days ?? ''}">
-        <div class="name">${escapeHtml(v.vessel)}</div>
-        <span class="${badgeClass}">${escapeHtml(v.status || 'ETA')}</span>
+        <div class="name" title="${escapeHtml(v.vessel || '')}">${escapeHtml(v.vessel || '—')}</div>
+        <span class="badge ${late ? 'late' : ''}" title="${escapeHtml(v.status || '')}">${escapeHtml(shortStatus(v.status) || 'ETA')}</span>
         <div class="meta">
-          <span>${escapeHtml(v.voyage || '')}</span>
           <span>${escapeHtml(v.port || '')}</span>
           <span>${qty}</span>
-          <span>${escapeHtml(v.buyer || '')}</span>
           <span class="eta-live">${escapeHtml(cd.label)}</span>
         </div>
         <div class="rail" aria-hidden="true"><i style="width:${Math.round(cd.progress * 100)}%"></i></div>
       </div>`;
   }
 
-  function waitingBlock(message, detail) {
-    return `
-      <div class="waiting">
-        <div class="pulse-ring" aria-hidden="true"></div>
-        <strong>${escapeHtml(message)}</strong>
-        <span>${escapeHtml(detail)}</span>
-      </div>`;
-  }
-
-  function fillColumn(listId, countId, rows, vessels) {
-    const list = $(listId);
-    const items = (rows || []).filter(Boolean);
+  function fillList(listId, countId, rows) {
+    const items = (rows || []).filter(Boolean).slice(0, 3);
     $(countId).textContent = String(items.length);
-    if (!items.length) {
-      list.innerHTML = '';
-      return;
-    }
-    list.innerHTML = items.slice(0, 4).map(vesselCard).join('');
+    $(listId).innerHTML = items.map(vesselCard).join('');
   }
 
   function renderVessels(v) {
@@ -264,35 +273,35 @@
     const empty = !(vessels.arrived || []).length && !(vessels.transit || []).length && !(vessels.booked || []).length;
 
     if (unconfigured || (empty && vessels.state !== 'current')) {
-      band.innerHTML = waitingBlock(
-        unconfigured ? 'TradeDeck not linked yet' : 'Waiting for vessel movement',
-        unconfigured
-          ? 'Add VIEWER credentials on the server to stream arrivals, transit, and booked lots.'
-          : 'Polling arrivals — boards fill as soon as shipments move.',
-      );
+      band.innerHTML = `
+        <div class="waiting">
+          <div class="pulse-ring" aria-hidden="true"></div>
+          <strong>${unconfigured ? 'TradeDeck not linked' : 'Waiting for vessel movement'}</strong>
+          <span>${unconfigured ? 'VIEWER credentials required on the server.' : 'Boards fill as shipments move.'}</span>
+        </div>`;
       setFeed('vessels', unconfigured ? 'unconfigured' : (vessels.state || 'loading'));
       return;
     }
 
     if (!band.querySelector('#list-arrived')) {
       band.innerHTML = `
-        <article class="pane pane-vessel" id="col-arrived" data-col="0">
-          <header class="pane-head"><h2>Arrived</h2><span class="count" id="count-arrived">0</span></header>
+        <article class="pane vessel-pane" id="col-arrived">
+          <header class="zone-head"><h2>Arrived</h2><span class="count" id="count-arrived">0</span></header>
           <div class="vessels" id="list-arrived"></div>
         </article>
-        <article class="pane pane-vessel" id="col-transit" data-col="1">
-          <header class="pane-head"><h2>In transit</h2><span class="count" id="count-transit">0</span></header>
+        <article class="pane vessel-pane" id="col-transit">
+          <header class="zone-head"><h2>In transit</h2><span class="count" id="count-transit">0</span></header>
           <div class="vessels" id="list-transit"></div>
         </article>
-        <article class="pane pane-vessel" id="col-booked" data-col="2">
-          <header class="pane-head"><h2>Booked</h2><span class="count" id="count-booked">0</span></header>
+        <article class="pane vessel-pane" id="col-booked">
+          <header class="zone-head"><h2>Booked</h2><span class="count" id="count-booked">0</span></header>
           <div class="vessels" id="list-booked"></div>
         </article>`;
     }
 
-    fillColumn('list-arrived', 'count-arrived', vessels.arrived, vessels);
-    fillColumn('list-transit', 'count-transit', vessels.transit, vessels);
-    fillColumn('list-booked', 'count-booked', vessels.booked, vessels);
+    fillList('list-arrived', 'count-arrived', vessels.arrived);
+    fillList('list-transit', 'count-transit', vessels.transit);
+    fillList('list-booked', 'count-booked', vessels.booked);
     setFeed('vessels', vessels.state || 'current');
   }
 
@@ -304,37 +313,26 @@
       const cd = etaCountdown(eta, Number.isFinite(days) ? days : null);
       const live = el.querySelector('.eta-live');
       const rail = el.querySelector('.rail i');
-      if (live && live.textContent !== cd.label) {
-        live.textContent = cd.label;
-        el.classList.add('live-tick');
-        setTimeout(() => el.classList.remove('live-tick'), 500);
-      }
+      if (live) live.textContent = cd.label;
       if (rail) rail.style.width = `${Math.round(cd.progress * 100)}%`;
     });
   }
 
   function renderNews(news) {
     const wire = $('news-wire');
-    const items = (news || []).slice(0, 7);
+    const items = (news || []).slice(0, 6);
     if (!items.length) {
       wire.innerHTML = '<li>Wire quiet</li>';
       return;
     }
     wire.innerHTML = items.map((n) => `
-      <li>${escapeHtml(n.title)}
-        <span class="src">${escapeHtml(n.source || '')}</span>
-      </li>`).join('');
-    const pulse = $('wire-pulse');
-    if (pulse) {
-      pulse.textContent = 'live';
-      pulse.classList.add('flash');
-    }
+      <li>${escapeHtml(n.title)}<span class="src">${escapeHtml(n.source || '')}</span></li>`).join('');
   }
 
   function render(payload) {
-    lastPayload = payload;
     renderPsx(payload.psx);
     renderFutures(payload.futures);
+    renderMetals(payload.metals || {});
     renderFob(payload.fob);
     renderVessels(payload.vessels);
     renderNews(payload.news);
@@ -347,16 +345,15 @@
       if (!res.ok) throw new Error('bad status');
       render(await res.json());
     } catch (err) {
-      setFeed('psx', 'error');
-      setFeed('futures', 'error');
-      setFeed('fob', 'error');
-      setFeed('vessels', 'error');
+      ['psx', 'futures', 'metals', 'fob', 'vessels'].forEach((f) => setFeed(f, 'error'));
     }
   }
 
   function cycleEmphasis() {
     const cols = [
-      $('card-psx'), $('card-futures'), $('card-fob'),
+      $('psx-charts')?.closest('.pane'),
+      $('fut-charts')?.closest('.pane'),
+      $('metals-pane'), $('fob-pane'), $('bdi-pane'),
       $('col-arrived'), $('col-transit'), $('col-booked'), $('col-news'),
     ].filter(Boolean);
     cols.forEach((c) => c.classList.remove('emphasize'));

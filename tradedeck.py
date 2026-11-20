@@ -217,7 +217,7 @@ class TradeDeckStore:
     def fetch_boards(self):
         arrivals = self._authed_get('/api/dashboard/arrivals')
         items = arrivals.get('items') if isinstance(arrivals, dict) else []
-        boards = bucket_arrivals(items, limit=4)
+        boards = bucket_arrivals(items, limit=3)
         return {
             **boards,
             'rawCount': arrivals.get('count') if isinstance(arrivals, dict) else len(items or []),

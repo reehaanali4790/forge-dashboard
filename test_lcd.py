@@ -114,9 +114,16 @@ class LcdCompose(unittest.TestCase):
         server.tradedeck.snapshot.return_value = {
             'arrived': [], 'transit': [], 'booked': [], 'configured': False, 'state': 'unconfigured',
         }
+        server.commodities.snapshot.return_value = {
+            'XAUUSD': {'name': 'Gold', 'mid': 2600, 'pct': 0.1, 'bars': [], 'state': 'current'},
+            'USOIL': {'name': 'Crude', 'mid': 80, 'pct': -0.2, 'bars': [], 'state': 'current'},
+        }
+        server.psx.lock = MagicMock()
+        server.psx.histories = {}
         out = compose_overview(server)
         self.assertIn('psx', out)
         self.assertIn('futures', out)
+        self.assertIn('metals', out)
         self.assertIn('fob', out)
         self.assertIn('vessels', out)
         self.assertIn('news', out)
