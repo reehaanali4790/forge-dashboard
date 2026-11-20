@@ -1,0 +1,15 @@
+{
+  "symbol": "XAUUSD",
+  "bid": 3572.10,
+  "ask": 3574.34,
+  "mid": 3573.22,
+  "high": 3620.50,
+  "low": 3540.10,
+  "dayDiffPercent": -4.47,
+  "direction": "down",
+  "marketState": "open",
+  "stale": false,
+  "timestamp": "2026-11-20T09:00:00Z",
+  "lastQuoteAt": "2026-11-20T09:00:00Z",
+  "source": "biquote.io"
+}

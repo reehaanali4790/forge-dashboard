@@ -1,0 +1,11 @@
+{
+  "symbol": "XAUUSD",
+  "interval": "1h",
+  "bars": [
+    {"openTime": "2026-11-20T08:00:00Z", "open": 3570.0, "high": 3578.0, "low": 3565.0, "close": 3573.22, "tickVolume": 120, "isOpen": true},
+    {"openTime": "2026-11-20T07:00:00Z", "open": 3580.0, "high": 3588.0, "low": 3568.0, "close": 3570.0, "tickVolume": 140, "isOpen": false},
+    {"openTime": "2026-11-20T06:00:00Z", "open": 3595.0, "high": 3602.0, "low": 3575.0, "close": 3580.0, "tickVolume": 110, "isOpen": false},
+    {"openTime": "2026-11-20T05:00:00Z", "open": 3610.0, "high": 3618.0, "low": 3590.0, "close": 3595.0, "tickVolume": 95, "isOpen": false},
+    {"openTime": "2026-11-20T04:00:00Z", "open": 3620.0, "high": 3625.0, "low": 3605.0, "close": 3610.0, "tickVolume": 88, "isOpen": false}
+  ]
+}

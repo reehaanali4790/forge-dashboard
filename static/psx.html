@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#05060a">
+  <meta name="description" content="Forge cyberpunk terminal — PSX momentum, XAUUSD and crude oil CFD mids.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/psx.css">
+  <script src="/psx.js" defer></script>
+  <title>Forge · Neon Terminal</title>
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true">
+    <div class="grid-floor"></div>
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+  </div>
+
+  <header class="hud-top">
+    <div class="hud-brand">
+      <a href="/" class="hud-home">FORGE</a>
+      <span class="hud-sep">//</span>
+      <strong>NEON TERMINAL</strong>
+      <span class="hud-chip">v2.0</span>
+    </div>
+    <div class="hud-clock">
+      <time id="lcd-date">—</time>
+      <time id="lcd-time" class="glow-cyan">—</time>
+      <span class="hud-tz">PKT</span>
+    </div>
+    <div class="hud-feeds">
+      <span class="feed-pill" id="feed-dps"><i class="dot loading"></i> DPS</span>
+      <span class="feed-pill" id="feed-bq"><i class="dot loading"></i> BIQUOTE</span>
+      <span class="hud-warn">NOT ADVICE · CFD MID</span>
+    </div>
+  </header>
+
+  <main class="terminal">
+    <section class="comm-rail" aria-label="Commodities">
+      <article class="holo-panel gold-panel" id="panel-xau">
+        <div class="holo-corners" aria-hidden="true"></div>
+        <header class="comm-head">
+          <div>
+            <p class="tele">XAUUSD · GOLD</p>
+            <h2 id="xau-name">Gold</h2>
+          </div>
+          <div class="comm-price">
+            <strong id="xau-mid" class="glow-gold">—</strong>
+            <span id="xau-pct" class="delta">—</span>
+          </div>
+        </header>
+        <div class="range-bar" id="xau-range" aria-hidden="true"><i></i></div>
+        <div class="comm-chart" id="xau-chart"><div class="empty">Syncing gold feed…</div></div>
+        <footer class="comm-foot" id="xau-foot">biquote · CFD mid</footer>
+      </article>
+
+      <article class="holo-panel oil-panel" id="panel-oil">
+        <div class="holo-corners" aria-hidden="true"></div>
+        <header class="comm-head">
+          <div>
+            <p class="tele">USOIL · CRUDE</p>
+            <h2 id="oil-name">Crude oil</h2>
+          </div>
+          <div class="comm-price">
+            <strong id="oil-mid" class="glow-oil">—</strong>
+            <span id="oil-pct" class="delta">—</span>
+          </div>
+        </header>
+        <div class="range-bar oil" id="oil-range" aria-hidden="true"><i></i></div>
+        <div class="comm-chart" id="oil-chart"><div class="empty">Syncing crude feed…</div></div>
+        <footer class="comm-foot" id="oil-foot">biquote · CFD mid</footer>
+      </article>
+    </section>
+
+    <section class="feature-holo" aria-labelledby="feature-title">
+      <div class="holo-corners" aria-hidden="true"></div>
+      <div class="feature-head">
+        <div>
+          <p class="tele">PSX FEATURED · AUTO ROTATE</p>
+          <h2 id="feature-title">Momentum signal</h2>
+        </div>
+        <div class="feature-meta" id="feature-meta">—</div>
+      </div>
+      <div class="feature-chart" id="feature-chart"><div class="empty">Warming DPS equities…</div></div>
+      <div class="lcd-breadth" id="lcd-breadth"></div>
+    </section>
+
+    <section class="board-row">
+      <article class="holo-panel dense">
+        <div class="holo-corners" aria-hidden="true"></div>
+        <header><h2>Momentum Top 5</h2><span class="pill cyan">SCREEN</span></header>
+        <div id="lcd-momentum" class="pick-grid"></div>
+      </article>
+      <article class="holo-panel dense">
+        <div class="holo-corners" aria-hidden="true"></div>
+        <header><h2>Model Top 5</h2><span class="pill magenta">SCORE</span></header>
+        <div id="lcd-model" class="pick-grid"></div>
+      </article>
+      <article class="holo-panel dense ledger-card">
+        <div class="holo-corners" aria-hidden="true"></div>
+        <header><h2>Paper ledger</h2><span class="pill lime">P&amp;L</span></header>
+        <div id="lcd-ledger"></div>
+      </article>
+    </section>
+  </main>
+
+  <footer class="hud-foot">
+    <p>PSX via DPS · Gold &amp; crude via biquote CFD mids · Polled snapshots, not ticks · Commercial PSX redistribution needs a license · <kbd>F</kbd> fullscreen</p>
+    <div class="hud-actions">
+      <button type="button" id="lcd-refresh">RE-SYNC</button>
+      <a href="/#psx">REPORT SECTION</a>
+    </div>
+  </footer>
+</body>
+</html>
