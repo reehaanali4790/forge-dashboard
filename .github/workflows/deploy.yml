@@ -1,4 +1,4 @@
-name: CI and Deploy
+﻿name: CI and Deploy
 
 on:
   push:
@@ -22,65 +22,40 @@ jobs:
         run: python -m unittest -v test_market test_psx test_commodities
 
   deploy:
-    name: Deploy to VPS
+    name: Deploy on VPS
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, forge-vps]
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
 
-      - name: Start ssh-agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
-
-      - name: Configure SSH
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
-          cat >> ~/.ssh/config <<EOF
-          Host forge-vps
-            HostName ${DEPLOY_HOST}
-            User ${{ secrets.DEPLOY_USER }}
-            IdentitiesOnly yes
-            ServerAliveInterval 15
-            ServerAliveCountMax 6
-            ConnectTimeout 30
-          EOF
-          chmod 600 ~/.ssh/config
-
-      - name: Sync app to /opt/forge-dashboard
+      - name: Sync into /opt/forge-dashboard
         run: |
           set -euo pipefail
-          ssh forge-vps 'mkdir -p /opt/forge-dashboard'
-          tar -czf - \
-            --exclude='.git' \
-            --exclude='.cache' \
-            --exclude='__pycache__' \
-            --exclude='.env' \
-            --exclude='.github' \
-            --exclude='*.pyc' \
-            . | ssh forge-vps 'tar -xzf - -C /opt/forge-dashboard'
+          sudo mkdir -p /opt/forge-dashboard
+          sudo rsync -a --delete \
+            --exclude '.git' \
+            --exclude '.cache' \
+            --exclude '__pycache__' \
+            --exclude '.env' \
+            --exclude '.github' \
+            ./ /opt/forge-dashboard/
+          if [[ ! -f /opt/forge-dashboard/.env ]]; then
+            sudo cp /opt/forge-dashboard/.env.example /opt/forge-dashboard/.env || sudo touch /opt/forge-dashboard/.env
+          fi
+          sudo chmod +x /opt/forge-dashboard/deploy/remote-deploy.sh
 
-      - name: Remote build and restart
-        run: |
-          set -euo pipefail
-          ssh forge-vps 'chmod +x /opt/forge-dashboard/deploy/remote-deploy.sh && /opt/forge-dashboard/deploy/remote-deploy.sh'
+      - name: Build and restart forge-dashboard only
+        run: sudo /opt/forge-dashboard/deploy/remote-deploy.sh
 
-      - name: Smoke check from runner
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      - name: Local smoke check
         run: |
           set -euo pipefail
           for i in $(seq 1 20); do
-            if curl -fsS "http://${DEPLOY_HOST}:3200/" | head -c 200 | grep -qi forge; then
-              echo "Public smoke OK on :3200"
+            if curl -fsS http://127.0.0.1:3200/ | head -c 200 | grep -qi forge; then
+              echo "Smoke OK on :3200"
               exit 0
             fi
-            sleep 3
+            sleep 2
           done
-          echo "Public smoke failed" >&2
           exit 1
