@@ -51,11 +51,15 @@ jobs:
       - name: Local smoke check
         run: |
           set -euo pipefail
-          for i in $(seq 1 20); do
-            if curl -fsS http://127.0.0.1:3200/ | head -c 200 | grep -qi forge; then
+          for i in $(seq 1 30); do
+            code=$(curl -fsS -o /tmp/forge-smoke.html -w '%{http_code}' http://127.0.0.1:3200/ || true)
+            if [[ "$code" == "200" ]] && grep -qi 'forge' /tmp/forge-smoke.html; then
               echo "Smoke OK on :3200"
+              curl -fsS -o /dev/null -w 'psx:%{http_code}\n' http://127.0.0.1:3200/psx
               exit 0
             fi
             sleep 2
           done
+          docker compose -p forge-dashboard ps || true
+          docker compose -p forge-dashboard logs --tail=80 forge || true
           exit 1
