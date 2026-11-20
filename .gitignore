@@ -5,3 +5,5 @@ __pycache__/
 !.env.example
 *.pyc
 .DS_Store
+_deploy_once.py
+*.tar.gz

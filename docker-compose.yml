@@ -1,0 +1,34 @@
+# Isolated Forge stack — own compose project, host port 3200 only.
+# Does not attach to tradedeck/caddy or other platform networks.
+services:
+  forge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: forge-dashboard:local
+    container_name: forge-dashboard
+    restart: unless-stopped
+    ports:
+      - "3200:3000"
+    env_file:
+      - .env
+    environment:
+      BRIEF_PROVIDER: ${BRIEF_PROVIDER:-openrouter}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4.1-mini}
+    volumes:
+      - forge_cache:/app/.cache
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3000/', timeout=3)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+
+volumes:
+  forge_cache:
