@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#05060a">
+  <meta name="description" content="Forge 64-inch LCD wall — PSX, futures, FOB/BDI, TradeDeck vessels.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/lcd.css">
+  <script src="/lcd.js" defer></script>
+  <title>Forge · 64″ Wall</title>
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true">
+    <div class="grid-floor"></div>
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+  </div>
+
+  <header class="hud">
+    <div class="hud-brand">
+      <a href="/" class="brand">FORGE</a>
+      <span class="sep">//</span>
+      <strong>64″ WALL</strong>
+      <span class="chip">PKT</span>
+    </div>
+    <div class="hud-clock">
+      <time id="wall-date">—</time>
+      <time id="wall-time" class="glow">—</time>
+    </div>
+    <div class="hud-feeds" id="feed-dots">
+      <span class="feed" data-feed="psx"><i class="dot loading"></i> PSX</span>
+      <span class="feed" data-feed="futures"><i class="dot loading"></i> SINA</span>
+      <span class="feed" data-feed="fob"><i class="dot loading"></i> FOB/BDI</span>
+      <span class="feed" data-feed="vessels"><i class="dot loading"></i> DECK</span>
+    </div>
+    <div class="hud-actions">
+      <kbd>F</kbd> fullscreen
+    </div>
+  </header>
+
+  <div class="marquee" aria-label="News ticker">
+    <div class="marquee-track" id="ticker-track">
+      <span class="marquee-item">Waiting for wire…</span>
+    </div>
+  </div>
+
+  <main class="wall">
+    <section class="row markets" aria-label="Markets">
+      <article class="glass" id="card-psx">
+        <header class="card-head">
+          <p class="tele">PSX · MOMENTUM</p>
+          <span class="state" id="psx-state">—</span>
+        </header>
+        <div class="psx-body">
+          <div class="breadth" id="psx-breadth"></div>
+          <ol class="mom-list" id="psx-mom"></ol>
+          <div class="spark" id="psx-spark" aria-hidden="true"></div>
+          <footer class="ledger" id="psx-ledger"></footer>
+        </div>
+      </article>
+
+      <article class="glass" id="card-futures">
+        <header class="card-head">
+          <p class="tele">FUTURES · SINA</p>
+          <span class="state" id="fut-state">—</span>
+        </header>
+        <div class="fut-grid" id="fut-grid"></div>
+      </article>
+
+      <article class="glass" id="card-fob">
+        <header class="card-head">
+          <p class="tele">FOB + SEAWAY</p>
+          <span class="honesty">scrape · not settlement</span>
+        </header>
+        <div class="fob-body">
+          <div class="fob-products" id="fob-products"></div>
+          <div class="bdi-panel" id="bdi-panel"></div>
+          <p class="disclaimer" id="fob-disclaimer">FOB scrape + BDI · not settlement / not advice</p>
+        </div>
+      </article>
+    </section>
+
+    <section class="row vessels" aria-label="TradeDeck and news">
+      <article class="glass col" id="col-arrived" data-col="0">
+        <header class="col-head">
+          <p class="tele">RECENTLY ARRIVED</p>
+          <span class="count" id="count-arrived">0</span>
+        </header>
+        <div class="vessel-list" id="list-arrived"></div>
+      </article>
+      <article class="glass col" id="col-transit" data-col="1">
+        <header class="col-head">
+          <p class="tele">IN TRANSIT</p>
+          <span class="count" id="count-transit">0</span>
+        </header>
+        <div class="vessel-list" id="list-transit"></div>
+      </article>
+      <article class="glass col" id="col-booked" data-col="2">
+        <header class="col-head">
+          <p class="tele">BOOKED</p>
+          <span class="count" id="count-booked">0</span>
+        </header>
+        <div class="vessel-list" id="list-booked"></div>
+      </article>
+      <article class="glass news-col" id="col-news">
+        <header class="col-head">
+          <p class="tele">WIRE</p>
+        </header>
+        <ul class="wire" id="news-wire"></ul>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

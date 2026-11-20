@@ -11,8 +11,11 @@ from urllib.parse import parse_qs, urlsplit
 from agent import BriefError, synthesize
 from commodities import SYMBOLS as COMMODITY_SYMBOLS, CommodityStore
 from envconfig import agent_status, load_dotenv
+from fob_freight import FobFreightStore
+from lcd import compose_overview, refresh_overview
 from market import FeedStore, HERE
 from psx import PsxStore
+from tradedeck import TradeDeckStore
 
 STATIC = HERE / 'static'
 
@@ -77,6 +80,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/api/psx/overview':
             self.json_response(psx_overview(self.server))
             return
+        if path == '/api/lcd/overview':
+            self.json_response(compose_overview(self.server))
+            return
         if path == '/api/psx/commodity':
             symbol = (parse_qs(parts.query).get('symbol') or [''])[0].upper().strip()
             if symbol not in COMMODITY_SYMBOLS:
@@ -112,7 +118,9 @@ class Handler(BaseHTTPRequestHandler):
             rel = 'index.html'
         elif path in ('/psx', '/psx.html'):
             rel = 'psx.html'
-        elif path in ('/app.js', '/style.css', '/reference.json', '/favicon.svg', '/psx.js', '/psx.css'):
+        elif path in ('/lcd', '/lcd.html'):
+            rel = 'lcd.html'
+        elif path in ('/app.js', '/style.css', '/reference.json', '/favicon.svg', '/psx.js', '/psx.css', '/lcd.js', '/lcd.css'):
             rel = path[1:]
         elif path.startswith('/assets/') and '/' not in path[len('/assets/'):]:
             rel = path[1:]
@@ -132,7 +140,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlsplit(self.path).path
-        if path not in ('/api/brief', '/api/refresh', '/api/psx/refresh'):
+        if path not in ('/api/brief', '/api/refresh', '/api/psx/refresh', '/api/lcd/refresh'):
             self.json_response({'error': 'Not found'}, 404)
             return
         if self.headers.get('Sec-Fetch-Site') == 'cross-site' or self.headers.get_content_type() != 'application/json':
@@ -160,6 +168,9 @@ class Handler(BaseHTTPRequestHandler):
             self.server.commodities.refresh()
             self.json_response(psx_overview(self.server))
             return
+        if path == '/api/lcd/refresh':
+            self.json_response(refresh_overview(self.server))
+            return
         try:
             self.json_response(synthesize(self.server.feeds.snapshot(), body))
         except BriefError as error:
@@ -178,12 +189,17 @@ def main():
     server.feeds = FeedStore()
     server.psx = PsxStore()
     server.commodities = CommodityStore()
+    server.fob = FobFreightStore()
+    server.tradedeck = TradeDeckStore()
     threading.Thread(target=server.feeds.run, daemon=True).start()
     threading.Thread(target=server.psx.run, daemon=True).start()
     threading.Thread(target=server.commodities.run, daemon=True).start()
+    threading.Thread(target=server.fob.run, daemon=True).start()
+    threading.Thread(target=server.tradedeck.run, daemon=True).start()
     ready = 'ready' if status['ready'] else 'not configured'
     print(f'Forge Steel Market Desk listening at http://{args.host}:{args.port}', flush=True)
     print(f'PSX + commodities LCD · http://{args.host}:{args.port}/psx', flush=True)
+    print(f'64\" wall board · http://{args.host}:{args.port}/lcd', flush=True)
     print(f'AI brief · {status["provider"]} · {ready} · model {status["model"]}', flush=True)
     server.serve_forever()
 

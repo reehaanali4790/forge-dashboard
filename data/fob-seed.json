@@ -1,0 +1,33 @@
+{
+  "products": [
+    {
+      "symbol": "HRC-FOB-CN-SAE1006",
+      "name": "HRC FOB China SAE1006",
+      "grade": "SAE1006",
+      "basis": "FOB China",
+      "unit": "USD/mt",
+      "mid": 503.0,
+      "asOf": "16 Nov 2026",
+      "source": "seed · CommodityScope snapshot"
+    },
+    {
+      "symbol": "HRC-FOB-CN-SS400",
+      "name": "HRC FOB China SS400",
+      "grade": "SS400",
+      "basis": "FOB China",
+      "unit": "USD/mt",
+      "mid": 476.0,
+      "asOf": "16 Nov 2026",
+      "source": "seed · CommodityScope snapshot"
+    }
+  ],
+  "bdi": {
+    "index": "BDI",
+    "value": 2901,
+    "change": -13,
+    "pct": -0.45,
+    "date": "2026-11-19",
+    "source": "seed · balticdryindex.com",
+    "attribution": "Value © Baltic Exchange (via BalticDryIndex.com)"
+  }
+}
