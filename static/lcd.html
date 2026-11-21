@@ -1,35 +1,36 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#dce8f5">
+  <meta name="theme-color" content="#000000">
   <meta name="description" content="Forge wall board — PSX charts, China futures, metals, FOB, vessels.">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/theme.css">
   <link rel="stylesheet" href="/lcd.css">
+  <script src="/theme.js"></script>
   <script src="/lcd.js" defer></script>
   <title>Forge</title>
 </head>
-<body>
-  <div class="sky" aria-hidden="true">
-    <div class="blob b1"></div>
-    <div class="blob b2"></div>
-    <div class="blob b3"></div>
-  </div>
-
+<body class="wall">
   <header class="topbar">
     <a href="/" class="brand">Forge</a>
     <div class="clock-block">
       <time id="wall-date">—</time>
       <time id="wall-time">—</time>
+      <span id="wall-meridiem"></span>
       <span class="tz">PKT</span>
     </div>
     <div class="feeds" id="feed-dots">
-      <span class="feed" data-feed="psx"><i class="dot loading"></i>PSX</span>
-      <span class="feed" data-feed="futures"><i class="dot loading"></i>Futures</span>
-      <span class="feed" data-feed="metals"><i class="dot loading"></i>Metals</span>
-      <span class="feed" data-feed="fob"><i class="dot loading"></i>FOB</span>
-      <span class="feed" data-feed="vessels"><i class="dot loading"></i>Vessels</span>
+      <span class="feed" data-feed="psx"><i class="status-dot loading"></i>PSX</span>
+      <span class="feed" data-feed="futures"><i class="status-dot loading"></i>Futures</span>
+      <span class="feed" data-feed="metals"><i class="status-dot loading"></i>Metals</span>
+      <span class="feed" data-feed="fob"><i class="status-dot loading"></i>FOB</span>
+      <span class="feed" data-feed="vessels"><i class="status-dot loading"></i>Vessels</span>
+      <button class="theme-toggle wall-theme" type="button" data-action="theme" aria-label="Switch colour theme">
+        <svg class="icon ico-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.3A8.5 8.5 0 0 1 9.7 3.5a8.5 8.5 0 1 0 10.8 10.8Z"/></svg>
+        <svg class="icon ico-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M4.2 12H2M22 12h-2.2M6.4 6.4 4.9 4.9M19.1 19.1l-1.5-1.5M17.6 6.4l1.5-1.5M4.9 19.1l1.5-1.5"/></svg>
+      </button>
     </div>
   </header>
 
@@ -56,7 +57,7 @@
       <div class="chart-grid five" id="fut-charts"></div>
     </section>
 
-    <section class="zone zone-rates" aria-label="Metals FOB BDI">
+    <section class="zone zone-rates" aria-label="Metals, FOB and freight">
       <article class="pane rate-pane" id="metals-pane">
         <header class="zone-head"><h2>Gold &amp; crude</h2><span class="live soft">CFD</span></header>
         <div class="rate-grid" id="metals-grid"></div>

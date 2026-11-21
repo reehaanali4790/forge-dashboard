@@ -8,14 +8,16 @@
   const $ = (id) => document.getElementById(id);
 
   function pktNow() {
-    const fmt = new Intl.DateTimeFormat('en-GB', {
+    const fmt = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Karachi',
       weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+      hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true,
     });
     const parts = Object.fromEntries(fmt.formatToParts(new Date()).map((p) => [p.type, p.value]));
     $('wall-date').textContent = `${parts.weekday} ${parts.day} ${parts.month} ${parts.year}`;
     $('wall-time').textContent = `${parts.hour}:${parts.minute}:${parts.second}`;
+    const meridiem = $('wall-meridiem');
+    if (meridiem) meridiem.textContent = parts.dayPeriod || '';
   }
 
   function fmt(n, digits = 2) {
@@ -37,8 +39,8 @@
   }
 
   function setFeed(name, state) {
-    const el = document.querySelector(`[data-feed="${name}"] .dot`);
-    if (el) el.className = `dot ${state || 'loading'}`;
+    const el = document.querySelector(`[data-feed="${name}"] .status-dot`);
+    if (el) el.className = `status-dot ${state || 'loading'}`;
   }
 
   function escapeHtml(s) {
@@ -197,7 +199,7 @@
           <div class="fob-tile ${changed ? 'flash' : ''}">
             <div class="label">${escapeHtml(p.grade || p.name || p.symbol)}</div>
             <div class="mid">${fmt(p.mid, 0)} <small>${escapeHtml(p.unit || 'USD/mt')}</small></div>
-            <div class="name" style="color:var(--muted);font-size:0.72rem;font-family:var(--mono)">${escapeHtml(p.name || '')}</div>
+            <div class="fob-name">${escapeHtml(p.name || '')}</div>
           </div>`;
       }).join('');
     }
@@ -369,6 +371,7 @@
     }
   });
 
+  window.ForgeTheme.mount('[data-action="theme"]');
   pktNow();
   setInterval(pktNow, 1000);
   setInterval(tickVesselCountdowns, 1000);

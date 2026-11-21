@@ -120,9 +120,12 @@ class Handler(BaseHTTPRequestHandler):
             rel = 'psx.html'
         elif path in ('/lcd', '/lcd.html'):
             rel = 'lcd.html'
-        elif path in ('/app.js', '/style.css', '/reference.json', '/favicon.svg', '/psx.js', '/psx.css', '/lcd.js', '/lcd.css'):
+        elif path in ('/app.js', '/style.css', '/reference.json', '/favicon.svg', '/psx.js', '/psx.css',
+                      '/lcd.js', '/lcd.css', '/theme.css', '/theme.js', '/charts.js'):
             rel = path[1:]
         elif path.startswith('/assets/') and '/' not in path[len('/assets/'):]:
+            rel = path[1:]
+        elif path.startswith('/vendor/') and '/' not in path[len('/vendor/'):]:
             rel = path[1:]
         else:
             self.json_response({'error': 'Not found'}, 404)
@@ -135,7 +138,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_content(
             file.read_bytes(),
             mime + ('; charset=utf-8' if mime.startswith('text/') else ''),
-            cache='public, max-age=3600' if rel.startswith('assets/') else 'no-cache',
+            cache='public, max-age=3600' if rel.startswith(('assets/', 'vendor/')) else 'no-cache',
         )
 
     def do_POST(self):

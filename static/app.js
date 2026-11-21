@@ -47,6 +47,11 @@ const fmt = (n, d = 0) => n == null || !Number.isFinite(n) ? '—' : new Intl.Nu
 const sign = (n, d = 2) => !Number.isFinite(n) ? '—' : (n > 0 ? '+' : n < 0 ? '−' : '') + fmt(Math.abs(n),d);
 const pct = (n,d = 2) => Number.isFinite(n) ? `${sign(n,d)}%` : '—';
 const tone = n => n > 0 ? 'positive' : n < 0 ? 'negative' : 'flat';
+// Chart and sparkline colour always comes from the live CSS tokens, so the
+// canvas and the DOM can never disagree about what "up" looks like.
+const palette = () => window.ForgeTheme.colors();
+const alpha = (color, amount) => window.ForgeCharts ? window.ForgeCharts.rgba(color, amount) : color;
+const moodColor = mood => { const c = palette(); return mood === 'positive' ? c.up : mood === 'negative' ? c.down : c['text-4']; };
 const move = (n, d = 2, chip = false) => `<span class="move ${tone(n)} ${chip ? 'move-chip' : ''}">${icon(n > 0 ? 'up' : n < 0 ? 'down' : 'dash')}${pct(n,d)}</span>`;
 const fmtPrice = (n, inst) => fmt(n, inst.precision);
 const priceDeltaDigits = (inst, n) => inst.id === 'USDCNY' && Math.abs(n) < .01 && n !== 0 ? 3 : 2;
@@ -54,6 +59,9 @@ const validDate = value => { const d = new Date(value); return value && Number.i
 const dateLabel = (value, opts = {}) => { const d = validDate(value); return d ? new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',timeZone:'Asia/Shanghai',...opts}).format(d) : '—'; };
 const timeLabel = value => { const d = validDate(value); return d ? new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Shanghai'}).format(d) : '—'; };
 const fullStamp = value => `${dateLabel(value)} · ${timeLabel(value)}`;
+// The desk clock reads in 12-hour form; dense data stamps stay 24-hour so
+// columns of times keep their width.
+const clockLabel = value => { const d = validDate(value); return d ? new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit',hour12:true,timeZone:'Asia/Shanghai'}).format(d) : '—'; };
 const state = {data:null, ref:null, id:'HC2701', range:'1M', mode:'line', news:'all', modalNews:'all', book:'local', bookAll:false, imported:[], dialog:null, trade:'all', tradeSource:'live', key:'', model:'openai/gpt-4.1-mini', provider:'openrouter', serverAgent:false, ai:null, aiShown:false, aiError:'', generating:false, deltaClock:0, psx:null, psxSymbol:null, psxBars:null};
 const agentReady = () => Boolean(state.key || state.serverAgent);
 const ranges = {'1W':7, '1M':30, '3M':91, '6M':182};
@@ -84,7 +92,7 @@ function syncHero() {
   const now = dataNow();
   $('#hero-date').textContent = dateLabel(now, {weekday:'short',year:'numeric'});
   $('#hero-date').dateTime = now.toISOString();
-  $('#hero-clock').textContent = `${timeLabel(now)} China time`;
+  $('#hero-clock').textContent = `${clockLabel(now)} China time`;
   $('#hero-clock').dateTime = now.toISOString();
   const [status, message] = marketStatus(), el = $('#feed-indicator');
   el.dataset.state = status;
@@ -94,11 +102,39 @@ function syncHero() {
 }
 function sparkline(data, id, mood) {
   if (!data || data.length < 2) return '';
-  const values = data.slice(-19).map(item=>item.close), color = mood==='positive' ? '#6dffb0' : mood==='negative' ? '#ff4d6d' : '#7a8aa3';
+  const values = data.slice(-24).map(item=>item.close), color = moodColor(mood);
   const min = Math.min(...values), max = Math.max(...values), span = max-min || 1;
-  const coords = values.map((v,i)=>[i/(values.length-1)*116,33-(v-min)/span*26]);
+  const coords = values.map((v,i)=>[i/(values.length-1)*116,33-(v-min)/span*25]);
   const path = coords.map((pair, i)=>`${i ? 'L' : 'M'} ${pair[0].toFixed(1)} ${pair[1].toFixed(1)}`).join(' ');
-  return `<svg class="sparkline" viewBox="0 0 117 37" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="s-${id}" x2="0" y2="1"><stop stop-color="${color}" stop-opacity=".18"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path d="${path} L116 37 L0 37Z" fill="url(#s-${id})"/><path d="${path}" fill="none" stroke="${color}" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/><circle cx="116" cy="${coords.at(-1)[1].toFixed(1)}" r="1.8" fill="${color}"/></svg>`;
+  return `<svg class="sparkline" viewBox="0 0 117 40" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="s-${id}" x2="0" y2="1"><stop stop-color="${color}" stop-opacity=".2"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path d="${path} L116 40 L0 40Z" fill="url(#s-${id})"/><path d="${path}" fill="none" stroke="${color}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+const TAPE_ORDER = ['HC2701','I2701','JM2701','J2701','USDCNY'];
+function renderTape() {
+  const node = $('#tape');
+  if (!node) return;
+  const items = [];
+  if (state.data) {
+    for (const id of TAPE_ORDER) {
+      const inst = state.data.instruments?.[id];
+      if (!inst) continue;
+      const q = state.data.quotes?.[id]?.value;
+      items.push({
+        label: inst.short, value: q ? fmtPrice(q.last, inst) : '—',
+        pct: q ? q.pct : null, digits: q ? priceDeltaDigits(inst, q.pct) : 2,
+        href: '#markets', asset: id,
+      });
+    }
+  }
+  const comm = state.psx?.commodities;
+  if (comm) {
+    for (const [key, label] of [['XAUUSD','Gold'],['USOIL','Crude']]) {
+      const entry = comm[key];
+      if (!entry) continue;
+      items.push({label, value: fmt(entry.mid, 2), pct: entry.pct, digits: 2, href: '#psx'});
+    }
+  }
+  if (!items.length) return;
+  node.innerHTML = items.map(item=>`<a class="tape-item" href="${item.href}"${item.asset ? ` data-tape="${item.asset}"` : ''} title="${esc(item.label)}"><span class="tape-sym">${esc(item.label)}</span><span class="tape-px">${item.value}</span><span class="tape-delta ${tone(item.pct)}">${pct(item.pct, item.digits)}</span></a>`).join('');
 }
 function renderQuotes() {
   const oldFocus = document.activeElement?.dataset?.asset, old = $('#quotes');
@@ -120,80 +156,69 @@ function currentBars() {
   const threshold = Date.parse(all.at(-1).date) - ranges[state.range]*864e5;
   return all.filter(bar=>Date.parse(bar.date)>threshold);
 }
-let plotGeometry = null;
-function niceTicks(lo, hi, target = 5) {
-  const rough = (hi-lo || Math.max(1, Math.abs(lo)*.01)) / target;
-  const power = Math.pow(10,Math.floor(Math.log10(rough)));
-  const fraction = rough/power;
-  const choice = [1,2,2.5,5,10].find(x=>x>=fraction) || 10;
-  const step = choice*power;
-  const begin = Math.floor(lo/step)*step, end = Math.ceil(hi/step)*step;
-  const fixed = Array.from({length:Math.min(12,Math.round((end-begin)/step)+1)}, (_, i)=>begin+i*step);
-  return {ticks:fixed.length>1?fixed:[lo-step,lo+step], step};
+// ---- Price chart -----------------------------------------------------------
+// Rendered by the vendored TradingView Lightweight Charts engine through the
+// shared Forge chart layer, so axes, crosshair, tooltip and theming match every
+// other board. Keyboard inspection and the CSV export are preserved.
+const priceChart = {handle: null, key: '', mark: null};
+
+function disposeChart(ref) {
+  if (ref.handle) { ref.handle.destroy(); ref.handle = null; }
+  ref.key = '';
+  ref.mark = null;
+}
+function ensurePriceChart(inst) {
+  const key = `${inst.id}|${inst.precision}|${inst.unit}`;
+  if (priceChart.handle && priceChart.key === key) return priceChart.handle;
+  disposeChart(priceChart);
+  if (!window.ForgeCharts?.available) return null;
+  priceChart.handle = window.ForgeCharts.create($('#plot'), {
+    kind: state.mode === 'candles' ? 'candles' : 'area',
+    precision: inst.precision,
+    unit: inst.unit,
+    locale: 'en-GB',
+    timeZone: 'Asia/Shanghai',
+    barSpacing: 8,
+    volume: true,
+    baseline: true,
+  });
+  priceChart.key = priceChart.handle ? key : '';
+  return priceChart.handle;
 }
 function renderChart() {
   const node = $('#plot'), select = $('#instrument'), inst = state.data?.instruments[state.id];
   $$('[data-range]').forEach(el=>el.setAttribute('aria-pressed',el.dataset.range===state.range));
   $$('[data-mode]').forEach(el=>el.setAttribute('aria-pressed',el.dataset.mode===state.mode));
   if (!inst) return;
-  if (!select.options.length) select.innerHTML = Object.values(state.data.instruments).map(s=>`<option value="${s.id}">${s.name}${s.id==='USDCNY' ? ' · Onshore' : ` · ${s.id}`}</option>`).join('');
+  if (!select.options.length) select.innerHTML = Object.values(state.data.instruments).map(s=>`<option value="${s.id}">${s.name}${s.id==='USDCNY' ? ' \u00b7 Onshore' : ` \u00b7 ${s.id}`}</option>`).join('');
   if (select.value!==state.id) select.value=state.id;
   const q=quoteFor()?.value, history=state.data.history[state.id];
   $('#chart-quote').innerHTML = q ? `<strong>${fmtPrice(q.last,inst)}</strong><span class="chart-unit">${inst.unit}</span><span title="Versus ${inst.basis}">${move(q.pct,priceDeltaDigits(inst,q.pct),true)}</span>` : '<span class="mono muted">Quote unavailable</span>';
   const bars = currentBars();
   const end = bars.at(-1), first = bars[0], windowMove = bars.length>1 ? (end.close/first.close-1)*100 : null;
-  const desc = bars.length ? `${state.mode==='line' ? 'Daily close' : 'Daily OHLC'} · ${dateLabel(first.date)} – ${dateLabel(end.date)}${history.state!=='current' ? ` · ${stateLabel(history.state)}` : ''}` : 'Daily history unavailable';
+  const desc = bars.length ? `${state.mode==='line' ? 'Daily close' : 'Daily OHLC'} \u00b7 ${dateLabel(first.date)} \u2013 ${dateLabel(end.date)}${history.state!=='current' ? ` \u00b7 ${stateLabel(history.state)}` : ''}` : 'Daily history unavailable';
   $('#chart-foot').innerHTML = `<div class="chart-info">${external(inst.url, `Sina Finance ${icon('diagonal')}`)}<span class="chart-foot-extra" title="Latest daily bar may be provisional.">${desc}</span></div><div class="chart-actions">${bars.length>1 ? `<span class="chart-window mono ${tone(windowMove)}" title="First to last daily close in this window">${state.range} ${pct(windowMove)}</span>` : ''}<button type="button" data-action="download-series" aria-label="Download chart data CSV" title="Download visible series (CSV)" ${!bars.length ? 'disabled' : ''}>${icon('download')}</button></div>`;
-  if (bars.length<2) { plotGeometry=null; node.classList.remove('chart-ready'); node.innerHTML = `<div class="empty">${history?.state==='loading' ? 'Loading daily prices…' : 'Not enough daily observations for this range.'}</div>`; return; }
-  const w = Math.max(252,node.clientWidth||660), h = Math.max(160,node.clientHeight||255), compact = w<480, right = w-(compact?53:62), left = 10, bottom=h-24, top=15;
-  const hi = Math.max(...bars.map(b=>state.mode==='candles'?b.high:b.close));
-  const lo = Math.min(...bars.map(b=>state.mode==='candles'?b.low:b.close));
-  const pad=(hi-lo||hi*.004)*.06;
-  const {ticks,step} = niceTicks(lo-pad,hi+pad,4.5);
-  const tLo=ticks[0], tHi=ticks.at(-1), span=tHi-tLo || 1;
-  const innerLeft=left+3, innerRight=right-6;
-  const x = i=>innerLeft+(innerRight-innerLeft)*i/(bars.length-1), y = v=>bottom-(bottom-top)*(v-tLo)/span;
+  if (bars.length<2) {
+    disposeChart(priceChart);
+    node.classList.remove('lw-host');
+    node.innerHTML = `<div class="empty">${history?.state==='loading' ? 'Loading daily prices\u2026' : 'Not enough daily observations for this range.'}</div>`;
+    return;
+  }
+  const handle = ensurePriceChart(inst);
+  if (!handle) { node.innerHTML = '<div class="empty">The chart engine could not load. Download the CSV to inspect the series.</div>'; return; }
   // Session spacing is intentional: weekends and holidays are omitted rather than interpolated.
-  const labelCount=Math.min(bars.length,compact?4:6);
-  const indexes = Array.from({length:labelCount},(_,i)=>Math.round(i*(bars.length-1)/(labelCount-1)));
-  const tickDecimals = Math.min(inst.precision,step>=1 ? 0 : Math.min(4,String(Number(step.toPrecision(5))).split('.')[1]?.length||0));
-  const ys = ticks.map(v=>`<line class="chart-gridline ${v===tLo?'base':''}" x1="${left}" x2="${right}" y1="${y(v)}" y2="${y(v)}"/><text class="chart-axis" x="${right+9}" y="${y(v)+3.4}">${fmt(v,tickDecimals)}</text>`).join('');
-  const xs = indexes.map((i,j)=>`<line class="chart-gridline" opacity=".37" x1="${x(i)}" x2="${x(i)}" y1="${top}" y2="${bottom}"/><line class="chart-tick" x1="${x(i)}" x2="${x(i)}" y1="${bottom}" y2="${bottom+4}"/><text class="chart-axis" text-anchor="${j===0?'start':j===labelCount-1?'end':'middle'}" x="${x(i)}" y="${h-6}">${dateLabel(bars[i].date)}</text>`).join('');
-  const line = bars.map((bar,i)=>`${i?'L':'M'}${x(i).toFixed(2)},${y(bar.close).toFixed(2)}`).join(' ');
-  const gap=(innerRight-innerLeft)/(bars.length-1), bw=Math.max(2, Math.min(10,gap*.58));
-  const barsSVG=bars.map((b,i)=>{
-    const topY=y(Math.max(b.open,b.close)), baseY=y(Math.min(b.open,b.close)), color=b.close>=b.open?'#6dffb0':'#ff4d6d', X=x(i);
-    return `<line x1="${X}" x2="${X}" y1="${y(b.high)}" y2="${y(b.low)}" stroke="${color}" stroke-width="1"/><rect x="${X-bw/2}" y="${topY}" width="${bw}" height="${Math.max(1.35,baseY-topY)}" rx=".6" fill="${color}"/>`;
-  }).join('');
-  const lastY=y(end.close);
-  const dataSVG = state.mode==='line' ? `<path fill="url(#price-fill)" d="${line} L${x(bars.length-1)},${bottom} L${x(0)},${bottom}Z"/><path class="chart-path" d="${line}"/>` : barsSVG;
-  const markerValue = fmtPrice(end.close,inst), markWidth = compact ? 49 : 56, markY=Math.max(top+2,Math.min(lastY,bottom-2));
-  const marker = `<line x1="${left}" x2="${right}" y1="${lastY}" y2="${lastY}" stroke="#00f0ff55" stroke-dasharray="3 4"/>${state.mode==='line' ? `<circle cx="${x(bars.length-1)}" cy="${lastY}" r="4" fill="#7af6ff" stroke="#05060a" stroke-width="1.6"/>` : ''}<rect x="${right+5}" y="${markY-8.5}" width="${markWidth}" height="17" rx="4" fill="#0a1824" stroke="#00f0ff66"/><text x="${right+5+markWidth/2}" y="${markY+3.4}" text-anchor="middle" style="fill:#7af6ff;font:500 ${compact?9:10}px var(--mono)">${markerValue}</text>`;
-  node.classList.remove('chart-ready');
-  node.innerHTML = `<svg class="series" viewBox="0 0 ${w} ${h}" role="img" aria-label="${inst.name} daily ${state.mode==='line'?'closes':'candles'}, ${state.range}, ${inst.unit}"><defs><linearGradient id="price-fill" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#00f0ff" stop-opacity=".24"/><stop offset=".92" stop-color="#00c8d8" stop-opacity=".015"/></linearGradient></defs>${ys}${xs}${dataSVG}${marker}<g class="chart-hover" hidden><line class="hover-v" y1="${top}" y2="${bottom}"/><line class="hover-h" x1="${left}" x2="${right}"/><circle r="4.4"/></g></svg><div class="plot-tip" role="status" aria-live="polite" hidden></div>`;
-  plotGeometry={bars,w,h,x,y,left,right,top,bottom,inst,hover:node.querySelector('.chart-hover'),tip:node.querySelector('.plot-tip'),at:null};
-  requestAnimationFrame(()=>node.classList.add('chart-ready'));
+  handle.setKind(state.mode==='candles' ? 'candles' : 'area');
+  handle.setData(bars);
+  priceChart.mark = null;
 }
-function plotMark(i) {
-  const g=plotGeometry;
-  if (!g) return;
-  i=Math.max(0,Math.min(g.bars.length-1,i));
-  if (g.at===i && !g.tip.hidden) return;
-  g.at=i; const b=g.bars[i], x=g.x(i), y=g.y(b.close);
-  g.hover.removeAttribute('hidden');
-  for (const key of ['x1','x2']) $('.hover-v',g.hover).setAttribute(key,x);
-  for (const key of ['y1','y2']) $('.hover-h',g.hover).setAttribute(key,y);
-  const point=$('circle',g.hover); point.setAttribute('cx',x); point.setAttribute('cy',y);
-  const pre=g.bars[i-1]?.close;
-  const valueD=Number.isFinite(pre)?pct((b.close/pre-1)*100,2):'';
-  g.tip.innerHTML=`${dateLabel(b.date,{year:'numeric'})}<br><strong>${fmtPrice(b.close,g.inst)}</strong> ${g.inst.unit} ${valueD ? `<b>${valueD}</b>` : ''}${state.mode==='candles' ? `<div class="ohlc"><span>Open <b>${fmtPrice(b.open,g.inst)}</b></span><span>High <b>${fmtPrice(b.high,g.inst)}</b></span><span>Low <b>${fmtPrice(b.low,g.inst)}</b></span><span>Close <b>${fmtPrice(b.close,g.inst)}</b></span></div>` : ''}`;
-  g.tip.hidden=false;
-  g.tip.style.left=`${Math.max(1,Math.min(g.w-g.tip.offsetWidth-1,x<g.w/2?x+11:x-g.tip.offsetWidth-10))}px`;
-  g.tip.style.top=`${Math.min(g.h-g.tip.offsetHeight-6,Math.max(4,y-g.tip.offsetHeight-13))}px`;
+function plotMark(index) {
+  if (!priceChart.handle) return;
+  priceChart.mark = priceChart.handle.markIndex(index);
 }
 function clearPlot() {
-  if (!plotGeometry) return;
-  plotGeometry.hover.setAttribute('hidden',''); plotGeometry.tip.hidden=true; plotGeometry.at=null;
+  if (!priceChart.handle) return;
+  priceChart.handle.clearMark();
+  priceChart.mark = null;
 }
 function newsAge(value) {
   const t=validDate(value); if (!t) return 'Undated';
@@ -328,7 +353,10 @@ function pmiSeries(p) {
   const x=i=>start+(end-start)*i/Math.max(1,series.length-1), y=v=>ybot-(v-lower)/(upper-lower)*(ybot-top);
   const d=series.map((v,i)=>`${i?'L':'M'}${x(i)},${y(v.value)}`).join(' ');
   const tick=series.map((v,i)=>i%3===0 || i===series.length-1 ? `<text x="${x(i)}" y="104" text-anchor="${i===0?'start':i===series.length-1?'end':'middle'}" class="chart-axis">${dateLabel(v.period+'-01',{day:undefined})}</text>`:'').join('');
-  return `<svg class="pmi-chart" viewBox="0 0 ${w} ${H}" preserveAspectRatio="none" aria-label="Official manufacturing PMI, last ${series.length} months" role="img"><defs><linearGradient id="pmi-fill" x2="0" y2="1"><stop stop-color="#00f0ff" stop-opacity=".2"/><stop offset="1" stop-color="#00f0ff" stop-opacity=".015"/></linearGradient></defs><line x1="${start}" x2="${end}" y1="${ybot}" y2="${ybot}" stroke="#00f0ff22"/><line x1="${start}" x2="${end}" y1="${y(50)}" y2="${y(50)}" stroke="#00f0ff44" stroke-dasharray="4 4"/><text x="${end+9}" y="${y(50)+3.4}" class="chart-axis">50.0</text>${tick}<path d="${d} L${end},${ybot}H${start}Z" fill="url(#pmi-fill)"/><path d="${d}" fill="none" stroke="#00f0ff" stroke-width="1.8" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>${series.map((v,i)=>`<circle cx="${x(i)}" cy="${y(v.value)}" r="${i===series.length-1?4:2.5}" fill="#7af6ff"><title>${dateLabel(v.period+'-01',{day:undefined,year:'numeric'})}: ${fmt(v.value,1)}</title></circle>`).join('')}</svg>`;
+  const c=palette(), last=series.at(-1);
+  // Blue reads the index as an index; the last dot takes the expansion colour.
+  const line=c.info, endColor=last.value>=50 ? c.up : c.down;
+  return `<svg class="pmi-chart" viewBox="0 0 ${w} ${H}" aria-label="Official manufacturing PMI, last ${series.length} months" role="img"><defs><linearGradient id="pmi-fill" x2="0" y2="1"><stop stop-color="${line}" stop-opacity=".22"/><stop offset="1" stop-color="${line}" stop-opacity="0"/></linearGradient></defs><line class="chart-gridline base" x1="${start}" x2="${end}" y1="${ybot}" y2="${ybot}"/><line x1="${start}" x2="${end}" y1="${y(50)}" y2="${y(50)}" stroke="${alpha(c['text-4'],.7)}" stroke-dasharray="3 4"/><text x="${end+9}" y="${y(50)+3.4}" class="chart-axis">50.0</text>${tick}<path d="${d} L${end},${ybot}H${start}Z" fill="url(#pmi-fill)"/><path d="${d}" fill="none" stroke="${line}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>${series.map((v,i)=>{const isLast=i===series.length-1;return `<circle cx="${x(i)}" cy="${y(v.value)}" r="${isLast?3.6:2}" fill="${isLast?endColor:line}" ${isLast?`stroke="${c.surface}" stroke-width="1.6"`:'opacity=".55"'}><title>${dateLabel(v.period+'-01',{day:undefined,year:'numeric'})}: ${fmt(v.value,1)}</title></circle>`;}).join('')}</svg>`;
 }
 function renderFundamentals() {
   const d=state.data;if(!d) return;
@@ -477,7 +505,8 @@ function openPriceSeries(index) {
     const vals=chain.map(r=>r.price), low=Math.min(...vals), high=Math.max(...vals), pad=(high-low||1)*.17;
     const x=i=>l+(r-l)*i/(chain.length-1),y=v=>b-(b-t)*(v-low+pad)/(high-low+2*pad);
     const path=vals.map((v,i)=>`${i?'L':'M'}${x(i)},${y(v)}`).join(' ');
-    spark=`<svg class="price-series-plot" role="img" aria-label="Observed asking prices from ${esc(first.source)}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path fill="#00f0ff14" d="${path} L${r},${b}H${l}Z"/><line x1="${l}" x2="${r}" y1="${b}" y2="${b}" class="chart-gridline base"/><path d="${path}" fill="none" stroke="#00f0ff" stroke-width="1.9" vector-effect="non-scaling-stroke"/>${chain.map((r,i)=>`<circle cx="${x(i)}" cy="${y(r.price)}" r="3" fill="#7af6ff"><title>${dateLabel(r.date)}: ${pricePrint(r)}</title></circle>`).join('')}<text class="chart-axis" x="${l}" y="${h-7}">${dateLabel(chain[0].date)}</text><text class="chart-axis" text-anchor="end" x="${r}" y="${h-7}">${dateLabel(first.date)}</text></svg>`;
+    const c=palette(), stroke=vals.at(-1)>=vals[0] ? c.up : c.down;
+    spark=`<svg class="price-series-plot" role="img" aria-label="Observed asking prices from ${esc(first.source)}" viewBox="0 0 ${w} ${h}"><path fill="${alpha(stroke,.14)}" d="${path} L${r},${b}H${l}Z"/><line x1="${l}" x2="${r}" y1="${b}" y2="${b}" class="chart-gridline base"/><path d="${path}" fill="none" stroke="${stroke}" stroke-width="1.9" stroke-linejoin="round"/>${chain.map((row,i)=>`<circle cx="${x(i)}" cy="${y(row.price)}" r="2.8" fill="${stroke}"><title>${dateLabel(row.date)}: ${pricePrint(row)}</title></circle>`).join('')}<text class="chart-axis" x="${l}" y="${h-7}">${dateLabel(chain[0].date)}</text><text class="chart-axis" text-anchor="end" x="${r}" y="${h-7}">${dateLabel(first.date)}</text></svg>`;
   }
   const bookLabel = state.book==='archive' ? bookInfo.archive.label : bookInfo[first.book].label;
   openDialog('series',`${first.product} · ${first.spec}`,'FORGE / RECORDED OBSERVATIONS',`<p>${bookLabel} · ${first.currency}. ${spark?'The chart shows observations from the latest source only; spacing represents observations, not elapsed days.':'Only one observation is available from the latest source.'} Blank dates are not imputed.</p>${spark}<div class="table-scroll"><table class="price-table"><thead><tr><th>Observed</th><th>Source</th><th class="num">${first.currency}</th></tr></thead><tbody>${rows.map(r=>`<tr><td class="as-of">${dateLabel(r.date,{year:'numeric'})}</td><td>${esc(r.source)}${r.page?` · slide ${r.page}`:''}</td><td class="num">${pricePrint(r)}</td></tr>`).join('')}</tbody></table></div>`,true);
@@ -545,27 +574,16 @@ async function request(url, method='GET', data) {
   if(!response.ok)throw new Error(result.error||'The service could not complete the request.');
   return result;
 }
-function psxSpark(bars) {
+function commoditySpark(bars) {
   if (!bars || bars.length < 2) return '';
-  const values = bars.slice(-40).map(b=>b.close);
-  const min = Math.min(...values), max = Math.max(...values), span = max - min || 1;
-  const coords = values.map((v,i)=>[i/(values.length-1)*160, 36 - (v-min)/span*28]);
-  const path = coords.map((p,i)=>`${i?'L':'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
-  const up = values.at(-1) >= values[0];
-  const color = up ? '#6dffb0' : '#ff4d6d';
-  return `<svg class="psx-spark" viewBox="0 0 160 40" preserveAspectRatio="none" aria-hidden="true"><path d="${path}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-}
-function neonCommSpark(bars, accent) {
-  if (!bars || bars.length < 2) return '';
-  const values = bars.slice(-48).map(b => b.close).filter(Number.isFinite);
+  const values = bars.slice(-56).map(b => b.close).filter(Number.isFinite);
   if (values.length < 2) return '';
   const min = Math.min(...values), max = Math.max(...values), span = max - min || 1;
-  const w = 88, h = 36;
-  const coords = values.map((v, i) => [i / (values.length - 1) * w, h - 4 - (v - min) / span * (h - 8)]);
+  const w = 88, h = 34;
+  const coords = values.map((v, i) => [i / (values.length - 1) * w, h - 3 - (v - min) / span * (h - 7)]);
   const path = coords.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
-  const color = accent === 'oil' ? '#ff8a3d' : '#ffd166';
-  const area = `${path} L${w} ${h} L0 ${h} Z`;
-  return `<svg class="psx-neon-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><path d="${area}" fill="${color}22"/><path d="${path}" fill="none" stroke="${color}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const color = moodColor(tone(values.at(-1) - values[0]));
+  return `<svg class="psx-neon-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><path d="${path} L${w} ${h} L0 ${h} Z" fill="${alpha(color,.16)}"/><path d="${path}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 function renderPsxCommodities() {
   const node = $('#psx-comm-strip');
@@ -581,29 +599,33 @@ function renderPsxCommodities() {
   }
   node.innerHTML = cards.map(({ key, cls, label }) => {
     const e = comm[key] || {};
-    return `<a class="psx-comm-card ${cls}" href="/psx" title="Open neon terminal">
-      <div><p class="tele">${label}</p><strong>${fmt(e.mid, 2)}</strong> <span class="delta mono ${tone(e.pct)}">${pct(e.pct, 2)}</span></div>
-      ${neonCommSpark(e.bars, cls)}
+    return `<a class="psx-comm-card ${cls}" href="/psx" title="Open the PSX terminal">
+      <div><p class="tele">${label}</p><strong>${fmt(e.mid, 2)}</strong><span class="delta mono ${tone(e.pct)}">${pct(e.pct, 2)}</span></div>
+      ${commoditySpark(e.bars)}
       <div class="foot">${esc(e.source || 'biquote · CFD mid')} · ${esc(e.state || 'loading')}</div>
     </a>`;
   }).join('');
 }
+const psxChart = {handle: null, key: '', mark: null};
 function renderPsxChart() {
   const node = $('#psx-chart'), foot = $('#psx-chart-foot'), badge = $('#psx-chart-symbol');
   const bars = state.psxBars, sym = state.psxSymbol;
-  if (!sym) { node.innerHTML='<div class="empty">Pick a symbol from the Top 5 lists.</div>'; badge.textContent='—'; foot.textContent=''; return; }
+  const fallback = message => { disposeChart(psxChart); node.classList.remove('lw-host'); node.innerHTML = `<div class="empty">${message}</div>`; };
+  if (!sym) { fallback('Pick a symbol from the Top 5 lists.'); badge.textContent='—'; foot.textContent=''; return; }
   badge.textContent = sym;
-  if (!bars || bars.length < 2) { node.innerHTML='<div class="empty">Loading daily series…</div>'; foot.textContent=''; return; }
-  const slice = bars.slice(-90);
-  const w = Math.max(280, node.clientWidth || 520), h = 180, left=8, right=w-48, top=12, bottom=h-22;
-  const hi = Math.max(...slice.map(b=>b.high ?? b.close)), lo = Math.min(...slice.map(b=>b.low ?? b.close));
-  const span = hi - lo || 1;
-  const x = i => left + (right-left)*i/Math.max(1,slice.length-1);
-  const y = v => bottom - (bottom-top)*(v-lo)/span;
-  const path = slice.map((b,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${y(b.close).toFixed(1)}`).join(' ');
+  if (!bars || bars.length < 2) { fallback('Loading daily series…'); foot.textContent=''; return; }
+  const slice = bars.slice(-120);
   const first = slice[0], last = slice.at(-1), movePct = (last.close/first.close-1)*100;
-  node.innerHTML = `<svg class="psx-plot" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(sym)} daily closes"><path d="${path} L${right},${bottom} H${left} Z" fill="#00f0ff18"/><path d="${path}" fill="none" stroke="#00f0ff" stroke-width="1.8" vector-effect="non-scaling-stroke"/><text class="chart-axis" x="${left}" y="${h-4}">${dateLabel(first.date)}</text><text class="chart-axis" text-anchor="end" x="${right}" y="${h-4}">${dateLabel(last.date)}</text><text class="chart-axis" x="${right+6}" y="${y(last.close)+3}">${fmt(last.close,2)}</text></svg>`;
-  foot.innerHTML = `<span>${esc(sym)} · ${slice.length} sessions · ${pct(movePct)} window</span><span class="mono">DPS EOD</span>`;
+  foot.innerHTML = `<span>${esc(sym)} · ${slice.length} sessions · <span class="mono ${tone(movePct)}">${pct(movePct)}</span> window</span><span class="mono">DPS EOD · PKR</span>`;
+  if (!window.ForgeCharts?.available) { fallback('The chart engine could not load.'); return; }
+  if (!psxChart.handle) {
+    psxChart.handle = window.ForgeCharts.create(node, {
+      kind: 'area', precision: 2, unit: 'PKR', locale: 'en-GB', timeZone: 'Asia/Karachi',
+      barSpacing: 6, baseline: true,
+    });
+  }
+  if (psxChart.handle) psxChart.handle.setData(slice);
+  else fallback('The chart engine could not load.');
 }
 async function selectPsxSymbol(symbol) {
   if (!symbol) return;
@@ -621,6 +643,7 @@ function renderPsxBoard() {
   const d = state.psx;
   if (!d) return;
   renderPsxCommodities();
+  renderTape();
   const b = d.breadth;
   $('#psx-breadth').innerHTML = b
     ? `<div class="psx-breadth-grid"><div><span>Symbols</span><strong>${b.symbols}</strong></div><div><span>Up</span><strong class="up">${b.advancers}</strong></div><div><span>Down</span><strong class="down">${b.decliners}</strong></div><div><span>Volume</span><strong class="mono">${fmt(b.volume,0)}</strong></div></div><div class="psx-fresh mono">${stateLabel(d.states?.watch||'loading')} · ${d.fetchedAt?.watch ? fullStamp(d.fetchedAt.watch) : 'warming'}</div>`
@@ -662,7 +685,7 @@ function useSnapshot(data) {
       state.model=data.agent.model||state.model;
     }
   }
-  syncHero();renderQuotes();renderChart();renderNews();renderFundamentals();renderBrief();renderWatch();renderTrade();
+  syncHero();renderQuotes();renderTape();renderChart();renderNews();renderFundamentals();renderBrief();renderWatch();renderTrade();
 }
 let refreshing=false;
 async function refresh(manual=false) {
@@ -775,30 +798,30 @@ document.addEventListener('submit',async event=>{
   }
 });
 $('#instrument').addEventListener('change',e=>setInstrument(e.target.value));
+// Tape items jump to the chart with that contract loaded.
+$('#tape').addEventListener('click',event=>{
+  const item=event.target.closest('[data-tape]');
+  if(item?.dataset.tape) setInstrument(item.dataset.tape);
+});
 $$('.sliders input,.base-inputs input').forEach(i=>i.addEventListener('input',renderCost));
 $('#dialog').addEventListener('close',()=>{state.dialog=null;$('#dialog-body').replaceChildren();openDialog.opener?.focus?.({preventScroll:true});});
 $('#dialog').addEventListener('click',e=>{if(e.target!==$('#dialog'))return;const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();});
-$('#plot').addEventListener('pointermove',e=>{
-  const g=plotGeometry;if(!g)return;
-  const x=e.clientX-e.currentTarget.getBoundingClientRect().left;
-  plotMark(Math.round((x-g.x(0))/(g.x(g.bars.length-1)-g.x(0))*(g.bars.length-1)));
-});
-$('#plot').addEventListener('pointerleave',clearPlot);
+// Pointer crosshair and resizing are handled inside the chart engine; the
+// keyboard path stays here so the series is inspectable without a mouse.
 $('#plot').addEventListener('blur',clearPlot);
 $('#plot').addEventListener('keydown',e=>{
-  const g=plotGeometry;if(!g)return;
-  if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();plotMark(e.key==='Home'?0:e.key==='End'?g.bars.length-1:(g.at??g.bars.length-1)+(e.key==='ArrowLeft'?-1:1));}
+  const handle=priceChart.handle;
+  if(!handle||!handle.bars.length)return;
+  if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){
+    e.preventDefault();
+    const last=handle.bars.length-1, from=priceChart.mark ?? last;
+    plotMark(e.key==='Home'?0:e.key==='End'?last:from+(e.key==='ArrowLeft'?-1:1));
+  }
   if(e.key==='Escape') clearPlot();
 });
-let priorSize='';
-new ResizeObserver(entries=>{
-  const r=entries[0].contentRect, sig=`${Math.round(r.width)}x${Math.round(r.height)}`;
-  if(sig===priorSize)return;
-  priorSize=sig;renderChart();
-}).observe($('#plot'));
 const nav=$$('.nav-link'), anchors=nav.map(link=>$(link.hash));
 function navScroll(){
-  const pos=$('.topbar').getBoundingClientRect().height+95;
+  const pos=$('.appbar').getBoundingClientRect().height+($('.tapebar')?.getBoundingClientRect().height||0)+72;
   let current=0;
   for(let i=0;i<anchors.length;i++)if(anchors[i].getBoundingClientRect().top<pos)current=i;
   if(window.scrollY>0 && window.innerHeight+window.scrollY>=document.documentElement.scrollHeight-8)current=anchors.length-1;
@@ -806,8 +829,17 @@ function navScroll(){
 }
 window.addEventListener('scroll',navScroll,{passive:true});
 window.addEventListener('hashchange',navScroll);
+// Switching theme repaints the SVG sparklines and inline chart colours; the
+// canvas charts repaint themselves from the same tokens via charts.js.
+function repaintForTheme() {
+  if (state.data) { renderQuotes(); renderTape(); renderFundamentals(); }
+  if (state.psx) { renderPsxCommodities(); }
+}
 async function start() {
-  setIcons();loadImports();renderCost();syncHero();navScroll();
+  setIcons();
+  window.ForgeTheme.mount('[data-action="theme"]');
+  window.ForgeTheme.onChange(repaintForTheme);
+  loadImports();renderCost();syncHero();navScroll();
   refresh();
   refreshPsx();
   try {state.ref=await request('/reference.json');renderWatch();renderBook();renderTrade();renderMass();}
